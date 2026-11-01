@@ -213,6 +213,8 @@ button.cardface:hover .cf-side::after { transform: translateX(25%); }
 }
 .cf-front { padding: 6.5cqw 7cqw; display: flex; flex-direction: column; justify-content: space-between; }
 .cf-front > * { position: relative; z-index: 1; }
+.cf-front > .cf-foot { position: static; }
+.cf-front > .cf-foot > * { position: relative; z-index: 1; }
 /* drawn artwork and card photos sit under the print */
 .cf-art { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; color: var(--ink); pointer-events: none; }
 .cf-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; pointer-events: none; user-select: none; -webkit-user-select: none; }
@@ -256,6 +258,15 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 .cf-brand { display: inline-flex; align-items: center; gap: 2.2cqw; min-width: 0; }
 .cf-mark { width: 7.4cqw; height: 7.4cqw; flex: none; border-radius: 1.8cqw; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 0 0 0.25cqw rgba(255, 255, 255, 0.18); }
 .cf-net { height: 8cqw; width: auto; flex: none; }
+/* network mark: small, tucked into the bottom-right corner */
+.cf-foot { padding-right: 15cqw; }
+.cf-foot .cf-net {
+  position: absolute; right: 5.5cqw; bottom: 5cqw; height: 5.2cqw;
+  filter: drop-shadow(0 0.4cqw 0.8cqw rgba(0, 0, 0, 0.28)); opacity: 0.95;
+}
+.cf-foot .cf-net-text { height: auto; font-size: 3cqw; letter-spacing: 0.04em; }
+/* the two-circle marks read smaller than wordmarks at the same height */
+.cf-foot .cf-net[aria-label="Mastercard"], .cf-foot .cf-net[aria-label="Maestro"], .cf-foot .cf-net[aria-label="American Express"] { height: 6.4cqw; bottom: 4.4cqw; }
 .cf-net-text { height: auto; font-weight: 900; font-style: italic; font-size: 4.2cqw; }
 .cf-back { transform: rotateY(180deg); display: flex; flex-direction: column; }
 .cf-stripe { height: 19%; margin-top: 9%; background: linear-gradient(180deg, #1b1b1f, #0b0b0d); }
