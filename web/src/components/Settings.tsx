@@ -63,7 +63,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
       setImportPass("");
       setError(null);
     } catch (err) {
-      setError({ where: "import", text: err instanceof WrongPassphraseError ? "That passphrase does not open this backup." : (err as Error).message });
+      setError({ where: "import", text: err instanceof WrongPassphraseError ? "That PIN does not open this backup." : (err as Error).message });
     }
     setBusy(false);
   }
@@ -133,7 +133,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
 
         <section>
           <h3>Backup</h3>
-          <p className="fine">The backup file is the encrypted vault. It opens only with the passphrase it was made with. Use it to move cards between devices.</p>
+          <p className="fine">The backup file is the encrypted vault. It opens only with the PIN it was made with. Use it to move cards between devices or to keep a copy somewhere safe.</p>
           <div className="actions-row">
             <button className="btn" onClick={() => downloadJson(`wallet-backup-${new Date().toISOString().slice(0, 10)}.json`, sealed)}>
               <Icon name="download" /> Export backup

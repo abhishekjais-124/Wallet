@@ -42,6 +42,24 @@ export async function paletteFromImage(file: File): Promise<[string, string]> {
   return [hex(first), hex(second)];
 }
 
+/**
+ * A photo of the card as a small JPEG for the card background: centre-cropped to the card's aspect, 640px wide
+ * (~40–60 KB), so 50 cards with photos still fit the vault and sync.
+ */
+export async function cardPhoto(file: File): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const W = 640;
+  const H = Math.round(W / 1.586);
+  const scale = Math.max(W / bitmap.width, H / bitmap.height);
+  const sw = W / scale;
+  const sh = H / scale;
+  const canvas = document.createElement("canvas");
+  Object.assign(canvas, { width: W, height: H });
+  canvas.getContext("2d")!.drawImage(bitmap, (bitmap.width - sw) / 2, (bitmap.height - sh) / 2, sw, sh, 0, 0, W, H);
+  bitmap.close();
+  return canvas.toDataURL("image/jpeg", 0.8);
+}
+
 function saturation(r: number, g: number, b: number): number {
   const max = Math.max(r, g, b);
   return max === 0 ? 0 : (max - Math.min(r, g, b)) / max;

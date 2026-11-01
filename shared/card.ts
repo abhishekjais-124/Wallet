@@ -19,6 +19,10 @@ export interface Card {
   favorite: boolean;
   /** card face gradient, taken from the uploaded card photo or picked by hand */
   colors: [string, string];
+  /** drawn artwork style; picked from the card's name when absent */
+  art?: string;
+  /** a photo of the card as its background (small JPEG data URL), encrypted with the rest */
+  image?: string;
   createdAt: number;
   updatedAt: number;
 }

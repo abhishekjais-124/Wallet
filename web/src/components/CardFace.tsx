@@ -1,8 +1,9 @@
 import React from "react";
 import { cvvLength, formatNumber, inkFor, maskNumber, type Card, type Network } from "@shared/card.ts";
+import { Art, artFor } from "./Art.tsx";
 import { BankMark } from "./BankMark.tsx";
 
-export type FaceCard = Pick<Card, "bank" | "nickname" | "kind" | "network" | "number" | "expiry" | "cvv" | "colors">;
+export type FaceCard = Pick<Card, "bank" | "nickname" | "kind" | "network" | "number" | "expiry" | "cvv" | "colors" | "art" | "image">;
 
 /**
  * A realistic card: front with chip, number and network mark; back with stripe and CVV panel. Sized by its container.
@@ -24,7 +25,8 @@ export const CardFace = React.memo(function CardFace({ card, flippable = false, 
     <Tag className={`cardface${flippable ? " flippable" : ""}${flipped ? " flipped" : ""}`} style={style} data-ink={inkFor(card.colors)} onClick={onClick}
       aria-label={label} type={onClick ? "button" : undefined}>
       <div className="cf-inner">
-        <div className="cf-side cf-front">
+        <div className={`cf-side cf-front${card.image ? " has-photo" : ""}`}>
+          {card.image ? <img className="cf-photo" src={card.image} alt="" draggable={false} /> : <Art style={artFor(card.nickname, card.bank, card.art)} name={card.nickname || card.bank} />}
           <div className="cf-row">
             <span className="cf-brand">
               {card.bank && <BankMark bank={card.bank} />}

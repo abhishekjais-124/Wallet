@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import {
-  cvvLength, detectNetwork, digits, formatNumber, luhnValid, NETWORK_LABEL, normalizeExpiry,
+  cvvLength, detectNetwork, digits, formatNumber, inkFor, luhnValid, NETWORK_LABEL, normalizeExpiry,
   type Card, type CardKind, type Network,
 } from "@shared/card.ts";
-import { paletteFromImage, PRESETS } from "../palette.ts";
+import { cardPhoto, paletteFromImage, PRESETS } from "../palette.ts";
 import { newId } from "../store.ts";
 import { Icon, Segmented, Sheet } from "../ui.tsx";
+import { Art, ART_LABEL, ART_STYLES, artFor } from "./Art.tsx";
 import { CardFace } from "./CardFace.tsx";
 
 export const CATEGORIES = ["Personal", "Business", "Travel", "Shopping", "Family"];
@@ -31,6 +32,8 @@ export function Editor({ card, categories, onSave, onClose }: {
     cvv: card?.cvv ?? "",
     category: card?.category ?? "Personal",
     colors: card?.colors ?? PRESETS[0]!.colors,
+    art: card?.art,
+    image: card?.image,
   }));
   const [cvvFocus, setCvvFocus] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -46,15 +49,16 @@ export function Editor({ card, categories, onSave, onClose }: {
     });
   }
 
-  async function onPhoto(e: React.ChangeEvent<HTMLInputElement>) {
+  async function onPhoto(e: React.ChangeEvent<HTMLInputElement>, keep: boolean) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
     try {
-      set("colors", await paletteFromImage(file));
-      setPhotoNote("Colours taken from your photo. The photo itself was not kept.");
+      const [colors, image] = await Promise.all([paletteFromImage(file), keep ? cardPhoto(file) : Promise.resolve(undefined)]);
+      setF((p) => ({ ...p, colors, image }));
+      setPhotoNote(keep ? "Your photo is the card's background. It is encrypted with the card." : "Colours taken from your photo. The photo itself was not kept.");
     } catch {
-      setPhotoNote("Could not read that image. Pick colours below instead.");
+      setPhotoNote("Could not read that image. Pick a style below instead.");
     }
   }
 
@@ -86,6 +90,8 @@ export function Editor({ card, categories, onSave, onClose }: {
         category: f.category.trim() || "Personal",
         favorite: card?.favorite ?? false,
         colors: f.colors,
+        ...(f.art ? { art: f.art } : {}),
+        ...(f.image ? { image: f.image } : {}),
         createdAt: card?.createdAt ?? now,
         updatedAt: now,
       });
@@ -144,22 +150,42 @@ export function Editor({ card, categories, onSave, onClose }: {
             </Field>
           </div>
           <div className="field">
-            <span>Card design</span>
+            <span>Look</span>
             <div className="design-row">
               <label className="btn sm">
-                <Icon name="image" /> From a photo
-                <input type="file" accept="image/*" hidden onChange={onPhoto} />
+                <Icon name="image" /> Photo of the card
+                <input type="file" accept="image/*" hidden onChange={(e) => void onPhoto(e, true)} />
               </label>
-              <input type="color" value={f.colors[0]} onChange={(e) => set("colors", [e.target.value, f.colors[1]])} aria-label="First colour" />
-              <input type="color" value={f.colors[1]} onChange={(e) => set("colors", [f.colors[0], e.target.value])} aria-label="Second colour" />
-            </div>
-            <div className="swatches">
-              {PRESETS.map((p) => (
-                <button key={p.name} type="button" className="swatch" title={p.name} aria-label={p.name}
-                  style={{ background: `linear-gradient(135deg, ${p.colors[0]}, ${p.colors[1]})` }} onClick={() => set("colors", p.colors)} />
-              ))}
+              <label className="btn sm ghost">
+                Colours only
+                <input type="file" accept="image/*" hidden onChange={(e) => void onPhoto(e, false)} />
+              </label>
+              {f.image && <button type="button" className="btn sm ghost" onClick={() => set("image", undefined)}><Icon name="x" /> Remove photo</button>}
             </div>
             {photoNote && <p className="fine">{photoNote}</p>}
+            <div className="design-row">
+              <input type="color" value={f.colors[0]} onChange={(e) => set("colors", [e.target.value, f.colors[1]])} aria-label="First colour" />
+              <input type="color" value={f.colors[1]} onChange={(e) => set("colors", [f.colors[0], e.target.value])} aria-label="Second colour" />
+              <div className="swatches">
+                {PRESETS.map((p) => (
+                  <button key={p.name} type="button" className="swatch" title={p.name} aria-label={p.name}
+                    style={{ background: `linear-gradient(135deg, ${p.colors[0]}, ${p.colors[1]})` }} onClick={() => set("colors", p.colors)} />
+                ))}
+              </div>
+            </div>
+            {!f.image && (
+              <div className="art-row" role="radiogroup" aria-label="Pattern">
+                {ART_STYLES.map((a) => {
+                  const on = artFor(f.nickname, f.bank, f.art) === a;
+                  return (
+                    <button key={a} type="button" role="radio" aria-checked={on} className={`art-tile${on ? " on" : ""}`} title={ART_LABEL[a]}
+                      style={{ "--c1": f.colors[0], "--c2": f.colors[1] } as React.CSSProperties} data-ink={inkFor(f.colors)} onClick={() => set("art", a)}>
+                      <Art style={a} name={f.nickname || f.bank || "Card"} />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
           {errors.form && <p className="form-error" role="alert">{errors.form}</p>}
           <p className="fine"><Icon name="shield" size={14} /> No PIN is ever asked for or stored. CVV is optional and encrypted.</p>

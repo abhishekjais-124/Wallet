@@ -20,8 +20,10 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 
 * Add, edit, delete and favourite cards. Fields: bank, nickname, name on card, credit or debit, network
   (detected from the number: Visa, Mastercard, RuPay, Amex, Diners, Discover, Maestro, JCB), number, expiry, CVV and category.
-* Card design from a photo: pick a photo of the card front and the two main colours become the card's gradient.
-  The photo is read in memory and discarded; it is never stored. Presets and colour pickers cover the rest.
+* Card look: every card gets drawn artwork (waves, honeycomb, rays, …) picked from its name, in its own colours, or
+  one you choose. "Photo of the card" uses your own photo as the background (centre-cropped, 640 px JPEG, encrypted
+  with the card); "Colours only" just takes the two main colours and discards the photo. Presets and colour pickers
+  cover the rest. The app never downloads banks' card artwork.
 * Detail view: tap the card to flip it. Copy buttons for the number, name, expiry, CVV, last four and bank.
 * Search by bank, nickname, name, category, network or last four digits. Filters for favourites, credit, debit,
   each category and each network. Sort by recent, bank or expiry. "Expires soon" (60 days) and "Expired" badges.
