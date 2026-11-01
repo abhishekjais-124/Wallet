@@ -11,9 +11,13 @@ const chrome = process.env.CHROME_BIN
 const svg = fs.readFileSync(path.join(dir, "icon.svg"), "utf8");
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "wallet-icons-"));
 
-function render(name, size, padding = 0) {
-  const inner = size - 2 * padding;
-  const html = `<!doctype html><html><body style="margin:0;background:${padding ? "#111318" : "transparent"};width:${size}px;height:${size}px;display:grid;place-items:center">${svg.replace(/width="512" height="512"/, `width="${inner}" height="${inner}"`)}</body></html>`;
+// iOS and Android maskable icons get their corners cut by the system: those are drawn full-bleed (square tile), and
+// the maskable one keeps the art inside the 80% safe zone
+const square = svg.replace(/rx="112"/g, 'rx="0"');
+const maskable = square.replace('<g id="art">', '<g id="art" transform="translate(256 256) scale(0.8) translate(-256 -256)">');
+
+function render(name, size, source = svg) {
+  const html = `<!doctype html><html><body style="margin:0;background:transparent;width:${size}px;height:${size}px">${source.replace(/width="512" height="512"/, `width="${size}" height="${size}"`)}</body></html>`;
   const file = path.join(tmp, `${name}.html`);
   fs.writeFileSync(file, html);
   const out = path.join(dir, name);
@@ -26,5 +30,6 @@ function render(name, size, padding = 0) {
 
 render("icon-192.png", 192);
 render("icon-512.png", 512);
-render("icon-512-maskable.png", 512, 64);
+render("icon-512-maskable.png", 512, maskable);
+render("apple-touch-icon.png", 180, square);
 fs.rmSync(tmp, { recursive: true, force: true });

@@ -17,7 +17,7 @@ import { Editor } from "./components/Editor.tsx";
 import { Lock } from "./components/Lock.tsx";
 import { RecoverySheet } from "./components/Recovery.tsx";
 import { Settings } from "./components/Settings.tsx";
-import { eraseSealed, getPref, loadSealed, saveSealed, setPref, type SortBy, type ThemePref, type VaultData } from "./store.ts";
+import { BASE, eraseSealed, getPref, loadSealed, saveSealed, setPref, type SortBy, type ThemePref, type VaultData } from "./store.ts";
 import { Icon, ToastHost } from "./ui.tsx";
 
 interface Session {
@@ -339,6 +339,19 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   const setTab = (t: "cards" | "ids") => { setTabState(t); setPref("tab", t); };
   const [addingDoc, setAddingDoc] = useState(false);
   const doneAddingDoc = useCallback(() => setAddingDoc(false), []);
+  const add = () => (tab === "cards" ? setEditing("new") : setAddingDoc(true));
+  const title = tab === "cards" ? "Your cards" : "Your IDs";
+
+  // once the big title scrolls under the bar, the bar shows it instead
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const el = titleRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([e]) => setScrolled(!e?.isIntersecting), { rootMargin: "-64px 0px 0px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
 
   const categories = useMemo(() => [...new Set(cards.map((c) => c.category))].sort(), [cards]);
   const networks = useMemo(() => [...new Set(cards.map((c) => c.network))], [cards]);
@@ -378,9 +391,13 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
 
   return (
     <>
-      <header className="topbar">
+      <header className={`topbar${scrolled ? " scrolled" : ""}`}>
         <div className="topbar-inner">
-          <span className="wordmark"><span className="dot" />Wallet</span>
+          <span className="wordmark">
+            <img className="brand" src={`${BASE}/icons/icon.svg`} alt="" width={30} height={30} />
+            <span className="wordmark-text">Wallet</span>
+          </span>
+          <span className="topbar-title" aria-hidden="true">{title}</span>
           <div className="topbar-actions">
             <button className="btn icon ghost" onClick={() => settings.onTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
               <Icon name={document.documentElement.dataset.theme === "dark" ? "sun" : "moon"} />
@@ -397,12 +414,12 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
             {tab === "cards" ? `${cards.length} card${cards.length === 1 ? "" : "s"}` : `${docs.length} ID${docs.length === 1 ? "" : "s"}`} · encrypted on this device
           </span>
           <div className="hero-row">
-            <h1>{tab === "cards" ? "Your cards" : "Your IDs"}</h1>
-            <button className="btn primary" onClick={() => (tab === "cards" ? setEditing("new") : setAddingDoc(true))}>
+            <h1 ref={titleRef}>{title}</h1>
+            <button className="btn primary hero-add" onClick={add}>
               <Icon name="plus" /> {tab === "cards" ? "Add card" : "Add ID"}
             </button>
           </div>
-          <div className="tabs" role="tablist" aria-label="Wallet sections">
+          <div className="tabs" role="tablist" aria-label="Wallet sections" data-active={tab}>
             <button role="tab" aria-selected={tab === "cards"} className={tab === "cards" ? "on" : ""} onClick={() => setTab("cards")}>
               <Icon name="card" size={17} /> Cards <span className="count">{cards.length}</span>
             </button>
@@ -477,6 +494,17 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
         )}
         </>}
       </main>
+
+      {/* phones: sections and the add button within thumb reach */}
+      <nav className="tabbar" aria-label="Wallet sections">
+        <button className={tab === "cards" ? "on" : ""} aria-current={tab === "cards" ? "page" : undefined} onClick={() => setTab("cards")}>
+          <Icon name="card" size={22} /><span>Cards</span>
+        </button>
+        <button className="tabbar-add" onClick={add} aria-label={tab === "cards" ? "Add card" : "Add ID"}><Icon name="plus" size={24} /></button>
+        <button className={tab === "ids" ? "on" : ""} aria-current={tab === "ids" ? "page" : undefined} onClick={() => setTab("ids")}>
+          <Icon name="idcard" size={22} /><span>IDs</span>
+        </button>
+      </nav>
 
       {open && (
         <Detail card={open} onClose={() => setOpenId(null)}
