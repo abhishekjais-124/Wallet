@@ -20,7 +20,10 @@ export default defineConfig({
   root,
   base: `${base}/`,
   plugins: [react(), versionFile()],
-  define: { __WALLET_BUILD__: JSON.stringify(buildId) },
+  define: {
+    __WALLET_BUILD__: JSON.stringify(buildId),
+    __WALLET_GOOGLE_CLIENT_ID__: JSON.stringify(process.env.WALLET_GOOGLE_CLIENT_ID ?? ""),
+  },
   resolve: { alias: { "@shared": path.join(repo, "shared") } },
   server: { port: Number(process.env.PORT) || 5181, strictPort: true, fs: { allow: [repo] } },
   build: { outDir: path.join(repo, "dist", "web"), emptyOutDir: true },

@@ -3,7 +3,8 @@
 A personal card wallet in the style of [OFD](https://aj124.com/OFD). Keep every credit and debit card in one
 place, shown as a realistic digital card that keeps the bank's colours, with copy buttons for each detail.
 
-Cards are encrypted in the browser and stored only on the device. The server ships the app and nothing else.
+Cards are encrypted in the browser with your 9-digit PIN. They live on the device, and optionally sync between
+devices through a hidden app folder in your own Google Drive. The server ships the app and nothing else.
 
 ## Quick start
 
@@ -39,6 +40,14 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 | Card PIN | No field exists for it. Never asked for, never stored. |
 | Browser | Card inputs opt out of browser and password-manager autofill saving. The server sends a strict CSP (`script-src 'self'`, `connect-src 'self'`, no framing), `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`. |
 
+**Sync with Google.** Settings → Sign in with Google (or "Restore with Google" on a new device). Sign-in is a
+full-page redirect (OAuth implicit token flow, scope `drive.appdata` only), so it works inside the Home Screen app.
+Only the sealed vault is uploaded, as `wallet-vault.json` in the Drive app-data folder, which is invisible in Drive
+and readable only by this OAuth client. Each device still needs the PIN. The newest save wins; a device with
+unsynced edits merges instead (union of cards, the more recently edited copy of each card wins), so a card deleted on
+one device while the other had offline edits can come back. The 1-hour access token is kept in `localStorage`; when
+it runs out, the app does one silent redirect to Google at the next launch.
+
 **Backups.** Settings → Export backup downloads the sealed vault as JSON. It opens only with the passphrase it was made
 with. Import merges cards into the current vault (the more recently edited copy of a card wins). On a new device,
 "Restore from a backup" on the first screen installs it directly.
@@ -63,7 +72,12 @@ Screen, so install it as a PWA on iPhone and keep a recent backup.
      },
    };
    ```
-3. Check: `https://aj124.com/Wallet` redirects to `/Wallet/`, the page loads, and `/Wallet/sw.js` returns 200.
+3. **Google sign-in**: in Google Cloud (the personal account), create an OAuth client of type *Web application* with
+   authorised JavaScript origins `https://aj124.com` and `http://localhost:8788`, and authorised redirect URIs
+   `https://aj124.com/Wallet/` and `http://localhost:8788/Wallet/`. Enable the Google Drive API, add the
+   `.../auth/drive.appdata` scope to the consent screen and your Gmail as a test user. Put the client id in Render as
+   `WALLET_GOOGLE_CLIENT_ID` and redeploy. Without it the Google buttons are hidden.
+4. Check: `https://aj124.com/Wallet` redirects to `/Wallet/`, the page loads, and `/Wallet/sw.js` returns 200.
 
 ## Layout
 

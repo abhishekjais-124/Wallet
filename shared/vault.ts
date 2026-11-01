@@ -13,6 +13,8 @@ export interface SealedVault {
   ct: string;
   /** set when the secret is a 9-digit PIN, so the lock screen shows the number pad */
   pin?: true;
+  /** when this record was sealed (ms); sync keeps the newest */
+  savedAt?: number;
 }
 
 export const isPin = (secret: string): boolean => /^\d{9}$/.test(secret);
@@ -53,7 +55,7 @@ export async function deriveKey(passphrase: string, salt = b64(random(16)), iter
 export async function seal<T>(data: T, vk: VaultKey): Promise<SealedVault> {
   const iv = random(12);
   const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, vk.key, enc.encode(JSON.stringify(data))));
-  const sealed: SealedVault = { v: 1, kdf: "PBKDF2-SHA256", iter: vk.iter, salt: vk.salt, iv: b64(iv), ct: b64(ct) };
+  const sealed: SealedVault = { v: 1, kdf: "PBKDF2-SHA256", iter: vk.iter, salt: vk.salt, iv: b64(iv), ct: b64(ct), savedAt: Date.now() };
   if (vk.pin) sealed.pin = true;
   return sealed;
 }

@@ -13,7 +13,8 @@ app.use((_req, res, next) => {
   res.set({
     "Content-Security-Policy":
       "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; " +
-      "connect-src 'self'; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; " +
+      // Google: Drive app-folder sync and token revoke; sign-in itself is a full-page redirect
+      "connect-src 'self' https://www.googleapis.com https://oauth2.googleapis.com; manifest-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; " +
       "form-action 'none'; frame-ancestors 'none'",
     "Referrer-Policy": "no-referrer",
     "X-Content-Type-Options": "nosniff",

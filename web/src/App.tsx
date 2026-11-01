@@ -1,12 +1,14 @@
-import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { digits, expiryState, last4, NETWORK_LABEL, type Card } from "@shared/card.ts";
-import { seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import { open as openVault, seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import { account, CLIENT_ID, signIn, signOut, takeRedirect, token } from "./google.ts";
+import { clearMeta, meta, pull, push, setMeta, whoAmI } from "./sync.ts";
 import { CardFace } from "./components/CardFace.tsx";
 import { Detail } from "./components/Detail.tsx";
 import { Editor } from "./components/Editor.tsx";
 import { Lock } from "./components/Lock.tsx";
 import { Settings } from "./components/Settings.tsx";
-import { eraseSealed, getPref, loadSealed, saveSealed, setPref, type SortBy, type ThemePref } from "./store.ts";
+import { eraseSealed, getPref, loadSealed, saveSealed, setPref, type SortBy, type ThemePref, type VaultData } from "./store.ts";
 import { Icon, ToastHost } from "./ui.tsx";
 
 interface Session {
@@ -14,7 +16,15 @@ interface Session {
   cards: Card[];
 }
 
+export interface SyncState {
+  status: "off" | "syncing" | "ok" | "error";
+  email?: string | null;
+  message?: string | undefined;
+  at?: number;
+}
+
 const HIDDEN_LOCK_MS = 60_000;
+const SILENT_KEY = "wallet.google.silentTried";
 
 export function App() {
   const [sealed, setSealed] = useState<SealedVault | null>(loadSealed);
@@ -26,20 +36,115 @@ export function App() {
   const lock = useCallback(() => setSession(null), []);
   useAutoLock(!!session, lockMinutes, lock);
 
+  const [sync, setSync] = useState<SyncState>({ status: "off" });
+  const sessionRef = useRef(session);
+  sessionRef.current = session;
+  // a Drive copy that changed while this device also had unsynced edits; merged at the next unlock
+  const pendingMerge = useRef<SealedVault | null>(null);
+
+  const upload = useCallback((s: SealedVault) => {
+    if (!account()) return;
+    setMeta({ dirty: true });
+    if (!token()) return setSync({ status: "error", email: account(), message: "Saved on this device. Sign in again to sync." });
+    setSync({ status: "syncing", email: account() });
+    push(s).then(
+      () => setSync({ status: "ok", email: account(), at: Date.now() }),
+      (err: Error) => setSync({ status: "error", email: account(), message: `Saved on this device, not synced: ${err.message}` }),
+    );
+  }, []);
+
   // every change re-seals the whole vault with a fresh IV before the UI shows it
   const persist = useCallback(async (cards: Card[], vk: VaultKey) => {
     const s = await seal({ cards }, vk);
     saveSealed(s);
     setSealed(s);
     setSession({ vk, cards });
+    upload(s);
+  }, [upload]);
+
+  /** Takes the newer Drive copy. Open on this device, it is decrypted with the current key; a different PIN locks. */
+  const adopt = useCallback(async (remote: SealedVault) => {
+    saveSealed(remote);
+    setSealed(remote);
+    setMeta({ syncedAt: remote.savedAt ?? 0, dirty: false });
+    const open = sessionRef.current;
+    if (!open) return;
+    try {
+      setSession({ vk: open.vk, cards: (await openVault<VaultData>(remote, open.vk)).cards });
+    } catch {
+      setSession(null);
+    }
   }, []);
+
+  /** Both sides changed: union of the cards, the more recently edited copy of each card wins. */
+  const merge = useCallback(async (remote: SealedVault, vk: VaultKey, cards: Card[]) => {
+    pendingMerge.current = null;
+    try {
+      const theirs = (await openVault<VaultData>(remote, vk)).cards;
+      const byId = new Map(cards.map((c) => [c.id, c]));
+      for (const c of theirs) if ((byId.get(c.id)?.updatedAt ?? -1) < c.updatedAt) byId.set(c.id, c);
+      await persist([...byId.values()], vk);
+    } catch {
+      setSync({ status: "error", email: account(), message: "The wallet in Google Drive uses a different PIN, so it was not merged." });
+    }
+  }, [persist]);
+
+  const syncNow = useCallback(async () => {
+    if (!CLIENT_ID || !account()) return setSync({ status: "off" });
+    if (!token()) {
+      // one silent round trip to Google per app launch, only while locked so nothing in progress is lost
+      if (!sessionRef.current && !sessionStorage.getItem(SILENT_KEY)) {
+        sessionStorage.setItem(SILENT_KEY, "1");
+        return signIn(true);
+      }
+      return setSync({ status: "error", email: account(), message: "Sign in again to sync." });
+    }
+    setSync({ status: "syncing", email: account() });
+    try {
+      const remote = await pull();
+      const local = loadSealed();
+      const m = meta();
+      const remoteAt = remote?.savedAt ?? 0;
+      const localAt = local?.savedAt ?? 0;
+      if (!remote) {
+        if (local) await push(local);
+      } else if (!local) {
+        await adopt(remote);
+      } else if (remoteAt === localAt) {
+        setMeta({ syncedAt: remoteAt, dirty: false });
+      } else if (m.syncedAt === 0 || (m.dirty && remoteAt > m.syncedAt)) {
+        // never synced here, or both sides changed: merge, never overwrite the Drive copy blindly
+        const open = sessionRef.current;
+        if (open) await merge(remote, open.vk, open.cards);
+        else pendingMerge.current = remote;
+      } else if (m.dirty || localAt > remoteAt) {
+        await push(local);
+      } else {
+        await adopt(remote);
+      }
+      setSync({ status: "ok", email: account(), at: Date.now() });
+    } catch (err) {
+      setSync({ status: "error", email: account(), message: (err as Error).message });
+    }
+  }, [adopt, merge]);
+
+  useEffect(() => {
+    const back = takeRedirect();
+    if (back && !back.ok) setSync({ status: "error", email: account(), message: back.error === "interaction_required" || back.error === "login_required" ? "Sign in again to sync." : back.error });
+    (back?.ok ? whoAmI().then(() => sessionStorage.removeItem(SILENT_KEY), () => {}) : Promise.resolve()).then(() => void syncNow());
+    const onVisible = () => document.visibilityState === "visible" && void syncNow();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [syncNow]);
 
   return (
     <ToastHost>
       {!session || !sealed ? (
-        <Lock sealed={sealed} onCreated={setSealed} onOpen={(vk, data) => {
+        <Lock sealed={sealed} onCreated={(s) => { setSealed(s); void syncNow(); }} onOpen={(vk, data) => {
+          const remote = pendingMerge.current;
+          if (remote) void merge(remote, vk, data.cards);
           // an older vault opened with nine digits is re-sealed once, so it is marked as a PIN vault from now on
-          if (vk.pin && sealed && !sealed.pin) void persist(data.cards, vk);
+          else if (vk.pin && sealed && !sealed.pin) void persist(data.cards, vk);
           else setSession({ vk, cards: data.cards });
         }} />
       ) : (
@@ -57,6 +162,13 @@ export function App() {
             onReplace: (cards) => persist(cards, session.vk),
             onRekey: (vk) => persist(session.cards, vk),
             onErase: () => { eraseSealed(); setSealed(null); setSession(null); },
+            sync: {
+              ...sync,
+              enabled: !!CLIENT_ID,
+              onSignIn: () => signIn(),
+              onSignOut: () => { void signOut().then(() => { clearMeta(); setSync({ status: "off" }); }); },
+              onSyncNow: () => void syncNow(),
+            },
           }}
         />
       )}

@@ -2,7 +2,9 @@ import React, { useState } from "react";
 import { deriveKey, seal, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
 import { readSealedFile, saveSealed, type VaultData } from "../store.ts";
 import { Icon } from "../ui.tsx";
+import { CLIENT_ID, signIn } from "../google.ts";
 import { PinPad } from "./PinPad.tsx";
+import { GoogleMark } from "./Settings.tsx";
 
 /** Create a vault with a 9-digit PIN, or open the existing one. Vaults made with an older text passphrase keep a text field. */
 export function Lock({ sealed, onOpen, onCreated }: {
@@ -100,6 +102,11 @@ export function Lock({ sealed, onOpen, onCreated }: {
         {creating ? (
           <>
             <p className="fine">There is no recovery. If you forget the PIN, the cards cannot be decrypted.</p>
+            {CLIENT_ID && (
+              <button type="button" className="btn block" onClick={() => signIn()}>
+                <GoogleMark /> Restore with Google
+              </button>
+            )}
             <label className="btn ghost block">
               <Icon name="upload" /> Restore from a backup
               <input type="file" accept="application/json,.json" hidden onChange={restore} />
