@@ -30,13 +30,13 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 
 | What | How |
 | --- | --- |
-| Encryption | The master passphrase is stretched with PBKDF2-SHA256 (600,000 iterations, random 16-byte salt) into a non-extractable AES-256-GCM key (`shared/vault.ts`). The whole card list is sealed as one blob with a fresh IV on every save. |
+| Encryption | The 9-digit PIN (older vaults: a passphrase) is stretched with PBKDF2-SHA256 (600,000 iterations, random 16-byte salt) into a non-extractable AES-256-GCM key (`shared/vault.ts`). The whole card list is sealed as one blob with a fresh IV on every save. |
 | Storage | Only the sealed blob is written to `localStorage`. Plaintext lives in memory while unlocked. Nothing is sent to the server. |
-| Passphrase | Never stored. There is no recovery: a forgotten passphrase means the cards cannot be decrypted. |
+| PIN | Nine digits on a phone-style number pad. Never stored. There is no recovery: a forgotten PIN means the cards cannot be decrypted. A 9-digit PIN is far weaker than a long passphrase against someone who steals the vault or a backup file and tests PINs offline, so keep backup files private. |
 | Masking | Number and CVV are masked by default. Revealing them hides them again after 20 seconds. |
 | Clipboard | A copied number or CVV is overwritten in the clipboard after 30 seconds (best effort: browsers allow this only while the page is focused). |
 | Auto-lock | Locks after 1, 5 or 15 minutes without input (Settings), and when the app returns after a minute in the background. The page is blurred while hidden so app-switcher snapshots show no card data. |
-| PIN | No field exists for it. Never asked for, never stored. |
+| Card PIN | No field exists for it. Never asked for, never stored. |
 | Browser | Card inputs opt out of browser and password-manager autofill saving. The server sends a strict CSP (`script-src 'self'`, `connect-src 'self'`, no framing), `Referrer-Policy: no-referrer` and `X-Frame-Options: DENY`. |
 
 **Backups.** Settings → Export backup downloads the sealed vault as JSON. It opens only with the passphrase it was made

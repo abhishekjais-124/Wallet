@@ -100,7 +100,7 @@ export function Editor({ card, categories, onSave, onClose }: {
     <Sheet title={card ? "Edit card" : "Add a card"} onClose={onClose} wide>
       <form className="editor" onSubmit={submit} autoComplete="off" noValidate>
         <div className="editor-preview">
-          <CardFace card={preview} reveal flipped={cvvFocus} revealCvv />
+          <CardFace card={preview} reveal flippable flipped={cvvFocus} revealCvv />
         </div>
         <div className="editor-fields">
           <div className="grid2">

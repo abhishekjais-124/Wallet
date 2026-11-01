@@ -3,9 +3,13 @@ import { cvvLength, formatNumber, inkFor, maskNumber, type Card, type Network } 
 
 export type FaceCard = Pick<Card, "bank" | "holder" | "kind" | "network" | "number" | "expiry" | "cvv" | "colors">;
 
-/** A realistic card: front with chip, number and network mark; back with stripe and CVV panel. Sized by its container. */
-export function CardFace({ card, flipped = false, reveal = false, revealCvv = false, onClick, label }: {
+/**
+ * A realistic card: front with chip, number and network mark; back with stripe and CVV panel. Sized by its container.
+ * Only `flippable` faces build the back and the 3D layers, so a long list stays a stack of flat, cheap cards.
+ */
+export const CardFace = React.memo(function CardFace({ card, flippable = false, flipped = false, reveal = false, revealCvv = false, onClick, label }: {
   card: FaceCard;
+  flippable?: boolean;
   flipped?: boolean;
   reveal?: boolean;
   revealCvv?: boolean;
@@ -16,7 +20,7 @@ export function CardFace({ card, flipped = false, reveal = false, revealCvv = fa
   const number = card.number ? (reveal ? formatNumber(card.number, card.network) : maskNumber(card.number, card.network)) : "•••• •••• •••• ••••";
   const Tag = onClick ? "button" : "div";
   return (
-    <Tag className={`cardface${flipped ? " flipped" : ""}`} style={style} data-ink={inkFor(card.colors)} onClick={onClick}
+    <Tag className={`cardface${flippable ? " flippable" : ""}${flipped ? " flipped" : ""}`} style={style} data-ink={inkFor(card.colors)} onClick={onClick}
       aria-label={label} type={onClick ? "button" : undefined}>
       <div className="cf-inner">
         <div className="cf-side cf-front">
@@ -41,7 +45,7 @@ export function CardFace({ card, flipped = false, reveal = false, revealCvv = fa
             <NetworkMark network={card.network} />
           </div>
         </div>
-        <div className="cf-side cf-back" aria-hidden={!flipped}>
+        {flippable && <div className="cf-side cf-back" aria-hidden={!flipped}>
           <div className="cf-stripe" />
           <div className="cf-sign">
             <span className="cf-sign-strip" />
@@ -51,23 +55,16 @@ export function CardFace({ card, flipped = false, reveal = false, revealCvv = fa
             <span className="cf-bank small">{card.bank}</span>
             <NetworkMark network={card.network} />
           </div>
-        </div>
+        </div>}
       </div>
     </Tag>
   );
-}
+});
 
+// the gold fill is a CSS gradient on the svg, so fifty cards do not repeat one gradient id fifty times
 function Chip() {
   return (
     <svg className="cf-chip" viewBox="0 0 50 38" aria-hidden="true">
-      <defs>
-        <linearGradient id="chipg" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#f6e1a2" />
-          <stop offset="0.5" stopColor="#d2a94e" />
-          <stop offset="1" stopColor="#f1d68c" />
-        </linearGradient>
-      </defs>
-      <rect x="1" y="1" width="48" height="36" rx="7" fill="url(#chipg)" stroke="rgba(0,0,0,.25)" />
       <path d="M1 13h14m20 0h14M1 25h14m20 0h14M17 1v10a4 4 0 0 0 4 4h8a4 4 0 0 0 4-4V1M17 37V27a4 4 0 0 1 4-4h8a4 4 0 0 1 4 4v10" fill="none" stroke="rgba(80,55,10,.45)" strokeWidth="1.3" />
     </svg>
   );

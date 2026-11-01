@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import { digits, expiryState, last4, NETWORK_LABEL, type Card } from "@shared/card.ts";
 import { seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
 import { CardFace } from "./components/CardFace.tsx";
@@ -69,6 +69,7 @@ function WalletView({ cards, save, onLock, settings }: {
   settings: SettingsProps;
 }) {
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query); // typing stays instant; the list catches up
   const [filter, setFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortBy>(() => getPref<SortBy>("sort", "recent"));
   const [openId, setOpenId] = useState<string | null>(null);
@@ -87,7 +88,7 @@ function WalletView({ cards, save, onLock, settings }: {
   ];
 
   const shown = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const q = deferredQuery.trim().toLowerCase();
     const qDigits = digits(q);
     const [kind, value] = filter.split(":");
     return cards
@@ -104,7 +105,7 @@ function WalletView({ cards, save, onLock, settings }: {
         || (sortBy === "bank" ? a.bank.localeCompare(b.bank)
           : sortBy === "expiry" ? expiryKey(a.expiry) - expiryKey(b.expiry)
             : b.updatedAt - a.updatedAt));
-  }, [cards, query, filter, sortBy]);
+  }, [cards, deferredQuery, filter, sortBy]);
 
   const open = cards.find((c) => c.id === openId) ?? null;
   const upsert = async (card: Card) => {
@@ -134,6 +135,14 @@ function WalletView({ cards, save, onLock, settings }: {
             <button className="btn primary" onClick={() => setEditing("new")}><Icon name="plus" /> Add card</button>
           </div>
         </section>
+
+        {!settings.sealed.pin && (
+          <div className="banner">
+            <Icon name="key" />
+            <span className="grow">Switch from your passphrase to a 9-digit PIN to unlock with the number pad.</span>
+            <button className="btn sm" onClick={() => setShowSettings(true)}>Switch</button>
+          </div>
+        )}
 
         {cards.length > 0 && (
           <div className="toolbar">
@@ -167,21 +176,7 @@ function WalletView({ cards, save, onLock, settings }: {
           <p className="muted center pad">No cards match.</p>
         ) : (
           <ul className="card-grid">
-            {shown.map((c, i) => {
-              const exp = expiryState(c.expiry);
-              return (
-                <li key={c.id} style={{ "--i": i } as React.CSSProperties}>
-                  <CardFace card={c} onClick={() => setOpenId(c.id)} label={`Open ${c.nickname || c.bank} ending ${last4(c.number)}`} />
-                  <div className="card-meta">
-                    <span className="card-name">{c.favorite && <Icon name="star" size={13} />}{c.nickname || c.bank}</span>
-                    <span className="card-sub">
-                      {exp !== "ok" && <span className={`chip ${exp === "expired" ? "danger" : "warn"}`}>{exp === "expired" ? "Expired" : "Expires soon"}</span>}
-                      {c.category}
-                    </span>
-                  </div>
-                </li>
-              );
-            })}
+            {shown.map((c, i) => <CardTile key={c.id} card={c} index={i} onOpen={setOpenId} />)}
           </ul>
         )}
       </main>
@@ -200,6 +195,24 @@ function WalletView({ cards, save, onLock, settings }: {
     </>
   );
 }
+
+// memoised so typing in search or opening a sheet does not re-render every card in a long list
+const CardTile = React.memo(function CardTile({ card: c, index, onOpen }: { card: Card; index: number; onOpen: (id: string) => void }) {
+  const exp = expiryState(c.expiry);
+  const open = useCallback(() => onOpen(c.id), [onOpen, c.id]);
+  return (
+    <li style={{ "--i": index } as React.CSSProperties}>
+      <CardFace card={c} onClick={open} label={`Open ${c.nickname || c.bank} ending ${last4(c.number)}`} />
+      <div className="card-meta">
+        <span className="card-name">{c.favorite && <Icon name="star" size={13} />}{c.nickname || c.bank}</span>
+        <span className="card-sub">
+          {exp !== "ok" && <span className={`chip ${exp === "expired" ? "danger" : "warn"}`}>{exp === "expired" ? "Expired" : "Expires soon"}</span>}
+          {c.category}
+        </span>
+      </div>
+    </li>
+  );
+});
 
 const expiryKey = (e: string) => {
   const [mm, yy] = e.split("/").map(Number);

@@ -1,8 +1,11 @@
 import React, { useState } from "react";
-import type { Card } from "@shared/card.ts";
-import { deriveKey, seal, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import { digits, type Card } from "@shared/card.ts";
+import { deriveKey, isPin, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
 import { downloadJson, readSealedFile, type ThemePref, type VaultData } from "../store.ts";
 import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
+
+// iOS shows the number pad for inputmode="numeric" with a digits-only pattern
+const pinInput = { inputMode: "numeric", pattern: "[0-9]*", maxLength: 9, autoComplete: "new-password" } as const;
 
 export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, cards, onReplace, onRekey, onErase, onClose }: {
   theme: ThemePref;
@@ -58,17 +61,17 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
 
   async function changePassphrase(e: React.FormEvent) {
     e.preventDefault();
-    if (pw.next.length < 8) return setError({ where: "pw", text: "Use at least 8 characters." });
-    if (pw.next !== pw.repeat) return setError({ where: "pw", text: "The new passphrases do not match." });
+    if (!isPin(pw.next)) return setError({ where: "pw", text: "The new PIN must be exactly 9 digits." });
+    if (pw.next !== pw.repeat) return setError({ where: "pw", text: "The new PINs do not match." });
     setBusy(true);
     try {
       await unlock(sealed, pw.current);
       await onRekey(await deriveKey(pw.next));
-      toast("Passphrase changed");
+      toast("PIN changed");
       setPw({ current: "", next: "", repeat: "" });
       setError(null);
     } catch (err) {
-      setError({ where: "pw", text: err instanceof WrongPassphraseError ? "The current passphrase is wrong." : (err as Error).message });
+      setError({ where: "pw", text: err instanceof WrongPassphraseError ? `The current ${sealed.pin ? "PIN" : "passphrase"} is wrong.` : (err as Error).message });
     }
     setBusy(false);
   }
@@ -104,8 +107,8 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
           {pending && (
             <form className="inline-form" onSubmit={mergeBackup}>
               <label className="field">
-                <span>Passphrase of the backup</span>
-                <input type="password" value={importPass} onChange={(e) => setImportPass(e.target.value)} autoFocus autoComplete="off" />
+                <span>{pending.pin ? "PIN" : "Passphrase"} of the backup</span>
+                <input type="password" value={importPass} onChange={(e) => setImportPass(e.target.value)} autoFocus autoComplete="off" {...(pending.pin ? pinInput : {})} />
               </label>
               <button className="btn primary" disabled={busy || !importPass}>Import cards</button>
             </form>
@@ -114,12 +117,13 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
         </section>
 
         <section>
-          <h3>Change passphrase</h3>
+          <h3>{sealed.pin ? "Change PIN" : "Switch to a 9-digit PIN"}</h3>
           <form className="inline-form" onSubmit={changePassphrase} autoComplete="off">
-            <input type="password" placeholder="Current passphrase" value={pw.current} onChange={(e) => setPw({ ...pw, current: e.target.value })} autoComplete="current-password" />
-            <input type="password" placeholder="New passphrase" value={pw.next} onChange={(e) => setPw({ ...pw, next: e.target.value })} autoComplete="new-password" />
-            <input type="password" placeholder="Repeat new passphrase" value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: e.target.value })} autoComplete="new-password" />
-            <button className="btn" disabled={busy || !pw.current || !pw.next}><Icon name="key" /> Change</button>
+            <input type="password" placeholder={sealed.pin ? "Current PIN" : "Current passphrase"} value={pw.current}
+              onChange={(e) => setPw({ ...pw, current: e.target.value })} {...(sealed.pin ? pinInput : {})} autoComplete="current-password" />
+            <input type="password" placeholder="New 9-digit PIN" value={pw.next} onChange={(e) => setPw({ ...pw, next: digits(e.target.value) })} {...pinInput} />
+            <input type="password" placeholder="Repeat new PIN" value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: digits(e.target.value) })} {...pinInput} />
+            <button className="btn" disabled={busy || !pw.current || !pw.next}><Icon name="key" /> {sealed.pin ? "Change PIN" : "Switch to PIN"}</button>
           </form>
           {error?.where === "pw" && <p className="form-error" role="alert">{error.text}</p>}
         </section>

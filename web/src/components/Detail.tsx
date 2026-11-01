@@ -21,7 +21,7 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
     <Sheet title={card.nickname || card.bank} onClose={onClose}>
       <div className="detail">
         <div className="detail-card">
-          <CardFace card={card} flipped={flipped} reveal={showNumber} revealCvv={showCvv} onClick={() => setFlipped((v) => !v)}
+          <CardFace card={card} flippable flipped={flipped} reveal={showNumber} revealCvv={showCvv} onClick={() => setFlipped((v) => !v)}
             label={flipped ? "Show the front" : "Show the back"} />
           <p className="fine center"><Icon name="flip" size={14} /> Tap the card to flip it</p>
         </div>

@@ -21,6 +21,7 @@ const PATHS = {
   shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z",
   flip: "M3 12a9 9 0 0 1 15.5-6.3L21 8M21 3v5h-5M21 12a9 9 0 0 1-15.5 6.3L3 16m0 5v-5h5",
   key: "M15 7a4 4 0 1 1-3.9 5H3v3h3v3h3v-3h2.1A4 4 0 0 1 15 7Z",
+  back: "M21 5H9l-7 7 7 7h12zM17 9l-6 6M11 9l6 6",
 } as const;
 
 export type IconName = keyof typeof PATHS;

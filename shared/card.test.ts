@@ -49,5 +49,7 @@ describe("vault", () => {
     await expect(unlock(sealed, "wrong horse")).rejects.toBeInstanceOf(WrongPassphraseError);
     const again = await seal({ cards: [] }, vk);
     expect(again.iv).not.toBe(sealed.iv);
+    expect(sealed.pin).toBeUndefined();
+    expect((await seal({}, await deriveKey("123456789", undefined, 100_000))).pin).toBe(true);
   });
 });
