@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import { digits, type Card } from "@shared/card.ts";
 import { mergeById, type IdDoc } from "@shared/doc.ts";
-import { deriveKey, isPin, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import {
+  createKeys, forRemote, isPin, isV2, newRecoveryKey, rewrapLocal, unlock, unlockWithRecovery, WrongPassphraseError, type SealedVault, type VaultKey,
+} from "@shared/vault.ts";
 import { exportBlobs, importBlobs } from "../blobs.ts";
 import { downloadJson, readSealedFile, vaultOnly, type BackupFile, type ThemePref, type VaultData } from "../store.ts";
 import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
 import type { SyncState } from "../App.tsx";
 import { BioSetup } from "./BioSetup.tsx";
+import { RecoveryInput } from "./Recovery.tsx";
 
 // iOS shows the number pad for inputmode="numeric" with a digits-only pattern
 const pinInput = { inputMode: "numeric", pattern: "[0-9]*", maxLength: 9, autoComplete: "new-password" } as const;
@@ -16,6 +19,15 @@ export interface SyncControls extends SyncState {
   onSignIn: () => void;
   onSignOut: () => void;
   onSyncNow: () => void;
+}
+
+export interface RecoveryControls {
+  /** the wallet has a master key and recovery key (older vaults get one at the next PIN unlock) */
+  on: boolean;
+  onNew: () => Promise<void>;
+  /** another device upgraded the wallet in Drive: join it with that recovery key */
+  join: boolean;
+  onJoin: (recovery: string, pin: string) => Promise<void>;
 }
 
 export interface BioControls {
@@ -29,9 +41,10 @@ export interface BioControls {
   onDismissOffer: () => void;
 }
 
-export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, cards, docs, onReplace, onRekey, onErase, sync, bio, onClose }: {
+export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, cards, docs, onReplace, onRekey, onErase, sync, bio, recovery, onClose }: {
   sync: SyncControls;
   bio: BioControls;
+  recovery: RecoveryControls;
   theme: ThemePref;
   onTheme: (t: ThemePref) => void;
   lockMinutes: number;
@@ -40,7 +53,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
   cards: Card[];
   docs: IdDoc[];
   onReplace: (cards: Card[], docs: IdDoc[]) => Promise<void>;
-  onRekey: (vk: VaultKey) => Promise<void>;
+  onRekey: (vk: VaultKey, recovery?: string) => Promise<void>;
   onErase: () => void;
   onClose: () => void;
 }) {
@@ -51,13 +64,17 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
   const [erase, setErase] = useState("");
   const [error, setError] = useState<{ where: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [joinForm, setJoinForm] = useState({ key: "", pin: "" });
+  const [confirmNew, setConfirmNew] = useState(false);
+  // a backup made since the recovery key opens with that key; older ones with the PIN they were made with
+  const pendingRecovery = !!pending && isV2(pending);
 
   // the backup carries the encrypted ID files too, so it restores everything without Google Drive
   async function exportBackup() {
     setBusy(true);
     try {
       const blobs = await exportBlobs(docs.flatMap((d) => d.files));
-      downloadJson(`wallet-backup-${new Date().toISOString().slice(0, 10)}.json`, { ...sealed, blobs });
+      downloadJson(`wallet-backup-${new Date().toISOString().slice(0, 10)}.json`, { ...forRemote(sealed), blobs });
     } catch (err) {
       setError({ where: "import", text: `Could not export: ${(err as Error).message}` });
     }
@@ -81,7 +98,8 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
     if (!pending) return;
     setBusy(true);
     try {
-      const { data } = await unlock<VaultData>(vaultOnly(pending), importPass);
+      const vault = vaultOnly(pending);
+      const { data } = isV2(vault) ? await unlockWithRecovery<VaultData>(vault, importPass) : await unlock<VaultData>(vault, importPass);
       if (pending.blobs) await importBlobs(pending.blobs);
       // same card or document in both: the more recently edited copy wins
       const theirDocs = data.docs ?? [];
@@ -91,7 +109,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
       setImportPass("");
       setError(null);
     } catch (err) {
-      setError({ where: "import", text: err instanceof WrongPassphraseError ? "That PIN does not open this backup." : (err as Error).message });
+      setError({ where: "import", text: err instanceof WrongPassphraseError ? `That ${pendingRecovery ? "recovery key" : "PIN"} does not open this backup.` : (err as Error).message });
     }
     setBusy(false);
   }
@@ -102,13 +120,43 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
     if (pw.next !== pw.repeat) return setError({ where: "pw", text: "The new PINs do not match." });
     setBusy(true);
     try {
-      await unlock(sealed, pw.current);
-      await onRekey(await deriveKey(pw.next));
+      const { vk } = await unlock(sealed, pw.current);
+      // same master key with a new PIN wrap; a vault from before the recovery key gets one now
+      if (vk.raw) await onRekey(await rewrapLocal(vk, pw.next));
+      else {
+        const code = newRecoveryKey();
+        await onRekey(await createKeys(pw.next, code), code);
+      }
       toast("PIN changed");
       setPw({ current: "", next: "", repeat: "" });
       setError(null);
     } catch (err) {
       setError({ where: "pw", text: err instanceof WrongPassphraseError ? `The current ${sealed.pin ? "PIN" : "passphrase"} is wrong.` : (err as Error).message });
+    }
+    setBusy(false);
+  }
+
+  async function joinWallet(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await recovery.onJoin(joinForm.key, joinForm.pin);
+      toast("Joined the wallet in Google Drive");
+      setJoinForm({ key: "", pin: "" });
+      setError(null);
+    } catch (err) {
+      setError({ where: "join", text: (err as Error).message });
+    }
+    setBusy(false);
+  }
+
+  async function newKey() {
+    setBusy(true);
+    try {
+      await recovery.onNew();
+      setConfirmNew(false);
+    } catch (err) {
+      setError({ where: "recovery", text: (err as Error).message });
     }
     setBusy(false);
   }
@@ -154,7 +202,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
             {sync.status === "off" ? (
               <>
                 <p className="fine">Keeps the same cards on your phone and computer. Only the encrypted vault is stored, in a hidden
-                  app folder in your Google Drive. Each device still asks for your PIN.</p>
+                  app folder in your Google Drive, locked by your recovery key. A new device asks for that key once, then for its own PIN.</p>
                 <button className="btn" onClick={sync.onSignIn}><GoogleMark /> Sign in with Google</button>
               </>
             ) : (
@@ -173,14 +221,40 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
                   )}
                   <button className="btn ghost" onClick={sync.onSignOut}>Sign out</button>
                 </div>
+                {recovery.join && (
+                  <form className="inline-form" onSubmit={joinWallet} autoComplete="off">
+                    <RecoveryInput value={joinForm.key} onChange={(key) => setJoinForm({ ...joinForm, key })} />
+                    <input type="password" placeholder="PIN of this device" value={joinForm.pin} onChange={(e) => setJoinForm({ ...joinForm, pin: digits(e.target.value) })} {...pinInput} autoComplete="current-password" />
+                    <button className="btn primary" disabled={busy || joinForm.key.length < 29 || !isPin(joinForm.pin)}><Icon name="key" /> Join and merge</button>
+                    {error?.where === "join" && <p className="form-error" role="alert">{error.text}</p>}
+                  </form>
+                )}
               </>
             )}
           </section>
         )}
 
+        {recovery.on && (
+          <section>
+            <h3>Recovery key</h3>
+            <p className="fine">Google Drive and backup files open only with the recovery key, never with the PIN, so a stolen copy
+              cannot be guessed open. Lost it? Make a new one while this device is unlocked; the old key stops working for new copies.</p>
+            {confirmNew ? (
+              <div className="actions-row">
+                <button className="btn primary" disabled={busy} onClick={() => void newKey()}><Icon name="key" /> Make the new key</button>
+                <button className="btn ghost" onClick={() => setConfirmNew(false)}>Cancel</button>
+              </div>
+            ) : (
+              <div className="actions-row"><button className="btn" onClick={() => setConfirmNew(true)}><Icon name="key" /> Make a new recovery key</button></div>
+            )}
+            {error?.where === "recovery" && <p className="form-error" role="alert">{error.text}</p>}
+          </section>
+        )}
+
         <section>
           <h3>Backup</h3>
-          <p className="fine">The backup file is the encrypted vault. It opens only with the PIN it was made with. Use it to move cards between devices or to keep a copy somewhere safe.</p>
+          <p className="fine">The backup file is the encrypted vault with your ID files. It opens with the recovery key (older backups with the
+            PIN they were made with). Use it to move cards between devices or to keep a copy somewhere safe.</p>
           <div className="actions-row">
             <button className="btn" disabled={busy} onClick={() => void exportBackup()}>
               <Icon name="download" /> Export backup
@@ -193,8 +267,9 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
           {pending && (
             <form className="inline-form" onSubmit={mergeBackup}>
               <label className="field">
-                <span>{pending.pin ? "PIN" : "Passphrase"} of the backup</span>
-                <input type="password" value={importPass} onChange={(e) => setImportPass(e.target.value)} autoFocus autoComplete="off" {...(pending.pin ? pinInput : {})} />
+                <span>{pendingRecovery ? "Recovery key" : pending.pin ? "PIN" : "Passphrase"} of the backup</span>
+                {pendingRecovery ? <RecoveryInput value={importPass} onChange={setImportPass} autoFocus />
+                  : <input type="password" value={importPass} onChange={(e) => setImportPass(e.target.value)} autoFocus autoComplete="off" {...(pending.pin ? pinInput : {})} />}
               </label>
               <button className="btn primary" disabled={busy || !importPass}>Import cards</button>
             </form>

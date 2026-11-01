@@ -58,7 +58,11 @@ export function setPref(key: string, value: string | number): void {
 }
 
 export function downloadJson(name: string, data: unknown): void {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  downloadText(name, JSON.stringify(data, null, 2), "application/json");
+}
+
+export function downloadText(name: string, text: string, type = "text/plain"): void {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);

@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { deriveKey, seal, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import {
+  createKeys, isV2, newRecoveryKey, rewrapLocal, seal, unlock, unlockWithRecovery, WrongPassphraseError, type SealedVault, type VaultKey,
+} from "@shared/vault.ts";
 import { bioErrorMessage, bioLabel, BioStaleError, enrolled as bioEnrolled, forget as bioForget, unlockWithBio } from "../bio.ts";
 import { importBlobs } from "../blobs.ts";
 import { readSealedFile, saveSealed, vaultOnly, type VaultData } from "../store.ts";
@@ -7,12 +9,18 @@ import { Icon } from "../ui.tsx";
 import { CLIENT_ID, signIn } from "../google.ts";
 import { bioIcon } from "./BioSetup.tsx";
 import { PinPad } from "./PinPad.tsx";
+import { RecoveryInput } from "./Recovery.tsx";
 import { GoogleMark } from "./Settings.tsx";
 
-/** Create a vault with a 9-digit PIN, or open the existing one. Vaults made with an older text passphrase keep a text field. */
+/**
+ * Create a vault with a 9-digit PIN, or open the existing one. Vaults made with an older text passphrase keep a text
+ * field. A copy from Google Drive or a backup has no PIN for this device yet: it opens with the recovery key, then
+ * asks for a new PIN.
+ */
 export function Lock({ sealed, onOpen, onCreated }: {
   sealed: SealedVault | null;
-  onOpen: (vk: VaultKey, data: VaultData, secret: string) => void;
+  /** `recovery` is set when a new recovery key was just made, so it can be shown once */
+  onOpen: (vk: VaultKey, data: VaultData, secret: string, recovery?: string) => void;
   onCreated: (sealed: SealedVault) => void;
 }) {
   const [firstPin, setFirstPin] = useState<string | null>(null);
@@ -20,7 +28,11 @@ export function Lock({ sealed, onOpen, onCreated }: {
   const [useLetters, setUseLetters] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [bio, setBio] = useState(() => !!sealed && bioEnrolled());
+  const needsRecovery = !!sealed && isV2(sealed) && !sealed.wraps.local;
+  const [bio, setBio] = useState(() => !!sealed && !needsRecovery && bioEnrolled());
+  // opened with the recovery key, waiting for this device's new PIN
+  const [recovered, setRecovered] = useState<{ vk: VaultKey; data: VaultData } | null>(null);
+  const [recoveryKey, setRecoveryKey] = useState("");
 
   async function open(secret: string): Promise<string | null> {
     if (!sealed) return "No wallet yet.";
@@ -76,18 +88,32 @@ export function Lock({ sealed, onOpen, onCreated }: {
     }
     setBusy(true);
     try {
-      const vk = await deriveKey(pin);
-      const data: VaultData = { cards: [] };
+      const recovery = recovered ? undefined : newRecoveryKey();
+      const vk = recovered ? await rewrapLocal(recovered.vk, pin) : await createKeys(pin, recovery!);
+      const data: VaultData = recovered?.data ?? { cards: [] };
       const s = await seal(data, vk);
       saveSealed(s);
       onCreated(s);
-      onOpen(vk, data, pin);
+      onOpen(vk, data, pin, recovery);
       return null;
     } catch (err) {
       setBusy(false);
-      setError(`Could not create the wallet: ${(err as Error).message}`);
+      setError(`Could not ${recovered ? "set the PIN" : "create the wallet"}: ${(err as Error).message}`);
       return "failed";
     }
+  }
+
+  async function openWithRecovery(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sealed || !isV2(sealed)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      setRecovered(await unlockWithRecovery<VaultData>(sealed, recoveryKey));
+    } catch (err) {
+      setError((err as Error).message);
+    }
+    setBusy(false);
   }
 
   async function restore(e: React.ChangeEvent<HTMLInputElement>) {
@@ -106,11 +132,14 @@ export function Lock({ sealed, onOpen, onCreated }: {
     }
   }
 
-  const creating = !sealed;
-  const title = creating ? (firstPin === null ? "Create a 9-digit PIN" : "Repeat your PIN") : "Wallet is locked";
-  const hint = creating
-    ? firstPin === null ? "Cards are encrypted with it on this device and never leave it." : "Enter the same nine digits again."
-    : useLetters ? "Enter your passphrase, then switch to a PIN in Settings." : "Enter your 9-digit PIN.";
+  // a new wallet, or a recovered copy getting this device's PIN: both pick a PIN twice
+  const creating = !sealed || !!recovered;
+  const title = needsRecovery && !recovered ? "Enter your recovery key"
+    : creating ? (firstPin === null ? (recovered ? "Set a PIN for this device" : "Create a 9-digit PIN") : "Repeat your PIN") : "Wallet is locked";
+  const hint = needsRecovery && !recovered ? "This copy came from Google Drive or a backup. It opens with the recovery key you saved when the wallet was made."
+    : creating
+      ? firstPin === null ? "It unlocks the wallet on this device. Google Drive and backups stay locked by your recovery key." : "Enter the same nine digits again."
+      : useLetters ? "Enter your passphrase, then switch to a PIN in Settings." : "Enter your 9-digit PIN.";
 
   return (
     <main className="lock">
@@ -123,21 +152,26 @@ export function Lock({ sealed, onOpen, onCreated }: {
             <Icon name={bioIcon()} size={22} /> Unlock with {bioLabel()}
           </button>
         )}
-        {creating || !useLetters ? (
-          <PinPad busy={busy} onComplete={creating ? create : open} />
+        {needsRecovery && !recovered ? (
+          <form className="lock-form" autoComplete="off" onSubmit={openWithRecovery}>
+            <RecoveryInput value={recoveryKey} onChange={setRecoveryKey} autoFocus />
+            <button className="btn primary block" disabled={busy || recoveryKey.length < 29}><Icon name="key" /> Open wallet</button>
+          </form>
+        ) : creating || !useLetters ? (
+          <PinPad key={recovered ? "recovered" : "pin"} busy={busy} onComplete={creating ? create : open} />
         ) : (
           <LegacyForm busy={busy} onSubmit={open} />
         )}
-        {!creating && !sealed.pin && (
+        {!creating && !needsRecovery && !sealed.pin && (
           <button type="button" className="btn ghost sm" onClick={() => { setUseLetters(!useLetters); setError(null); }}>
             {useLetters ? "Use the number pad" : "My passphrase has letters"}
           </button>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
-        {busy && <p className="fine"><span className="spinner dark" aria-hidden="true" /> {creating ? "Creating…" : "Unlocking…"}</p>}
-        {creating ? (
+        {busy && <p className="fine"><span className="spinner dark" aria-hidden="true" /> {creating && !recovered ? "Creating…" : "Unlocking…"}</p>}
+        {!sealed ? (
           <>
-            <p className="fine">There is no recovery. If you forget the PIN, the cards cannot be decrypted.</p>
+            <p className="fine">Next you get a recovery key. Save it: it opens the wallet on a new device or from a backup.</p>
             {CLIENT_ID && (
               <button type="button" className="btn block" onClick={() => signIn()}>
                 <GoogleMark /> Restore with Google
@@ -148,6 +182,8 @@ export function Lock({ sealed, onOpen, onCreated }: {
               <input type="file" accept="application/json,.json" hidden onChange={restore} />
             </label>
           </>
+        ) : needsRecovery && !recovered ? (
+          <p className="fine">Lost the recovery key? Unlock on a device that still has the wallet and make a new one in Settings.</p>
         ) : (
           <p className="fine"><Icon name="shield" size={14} /> AES-256-GCM · stored only on this device</p>
         )}

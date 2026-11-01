@@ -1,7 +1,10 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { digits, expiryState, last4, NETWORK_LABEL, type Card } from "@shared/card.ts";
 import { mergeLive, mergeTombstones, type IdDoc, type Tombstones } from "@shared/doc.ts";
-import { isPin, open as openVault, seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import {
+  createKeys, deriveKey, isPin, isV2, newRecoveryKey, open as openVault, rewrapLocal, rewrapRecovery, seal, unlock, unlockWithRecovery,
+  type SealedVault, type VaultKey,
+} from "@shared/vault.ts";
 import { available as bioAvailable, bioLabel, enrolled as bioEnrolled, forget as bioForget } from "./bio.ts";
 import { bioIcon, BioSetup } from "./components/BioSetup.tsx";
 import { account, CLIENT_ID, signIn, signOut, takeRedirect, token } from "./google.ts";
@@ -12,6 +15,7 @@ import { Detail } from "./components/Detail.tsx";
 import { DocsView } from "./components/Docs.tsx";
 import { Editor } from "./components/Editor.tsx";
 import { Lock } from "./components/Lock.tsx";
+import { RecoverySheet } from "./components/Recovery.tsx";
 import { Settings } from "./components/Settings.tsx";
 import { eraseSealed, getPref, loadSealed, saveSealed, setPref, type SortBy, type ThemePref, type VaultData } from "./store.ts";
 import { Icon, ToastHost } from "./ui.tsx";
@@ -31,6 +35,11 @@ export interface SyncState {
 }
 
 const HIDDEN_LOCK_MS = 60_000;
+const JOIN_MESSAGE = "This wallet was upgraded on another device. Enter its recovery key below to keep syncing.";
+
+// which key a vault is sealed with: the master key id (v2) or the PIN salt (v1)
+const keyOf = (s: SealedVault): string => (isV2(s) ? s.kid : s.salt);
+const vkId = (vk: VaultKey): string => vk.kid ?? vk.salt ?? "";
 const SILENT_KEY = "wallet.google.silentTried";
 
 export function App() {
@@ -53,6 +62,10 @@ export function App() {
   sessionRef.current = session;
   // a Drive copy that changed while this device also had unsynced edits; merged at the next unlock
   const pendingMerge = useRef<SealedVault | null>(null);
+  // a Drive copy sealed with another master key (made on another device): joined with its recovery key
+  const [joinRemote, setJoinRemote] = useState<SealedVault | null>(null);
+  // a recovery key just made, shown once
+  const [recoveryShown, setRecoveryShown] = useState<string | null>(null);
 
   const upload = useCallback((s: SealedVault) => {
     if (!account()) return;
@@ -85,14 +98,19 @@ export function App() {
 
   /** Takes the newer Drive copy. Open on this device, it is decrypted with the current key; a different PIN locks. */
   const adopt = useCallback(async (remote: SealedVault) => {
-    saveSealed(remote);
-    setSealed(remote);
+    // the Drive copy has no PIN wrap; this device keeps its own while the master key is the same
+    const local = loadSealed();
+    const kept = isV2(remote) && local && isV2(local) && local.kid === remote.kid && local.wraps.local
+      ? { ...remote, wraps: { ...remote.wraps, local: local.wraps.local } } : remote;
+    saveSealed(kept);
+    setSealed(kept);
     setMeta({ syncedAt: remote.savedAt ?? 0, dirty: false });
     const open = sessionRef.current;
     if (!open) return;
     try {
-      const data = await openVault<VaultData>(remote, open.vk);
-      setSession({ vk: open.vk, cards: data.cards, docs: data.docs ?? [], deleted: data.deleted ?? {} });
+      const data = await openVault<VaultData>(kept, open.vk);
+      const vk = isV2(kept) ? { ...open.vk, wraps: kept.wraps } : open.vk;
+      setSession({ vk, cards: data.cards, docs: data.docs ?? [], deleted: data.deleted ?? {} });
     } catch {
       setSession(null);
     }
@@ -104,9 +122,16 @@ export function App() {
    */
   const merge = useCallback(async (remote: SealedVault, vk: VaultKey, cards: Card[], docs: IdDoc[], deleted: Tombstones) => {
     pendingMerge.current = null;
+    if (keyOf(remote) !== vkId(vk) && isV2(remote)) {
+      setSession({ vk, cards, docs, deleted });
+      setJoinRemote(remote);
+      return setSync({ status: "error", email: account(), message: JOIN_MESSAGE });
+    }
     try {
       const theirs = await openVault<VaultData>(remote, vk);
       const both = mergeTombstones(deleted, theirs.deleted);
+      // a recovery key made since on the other device replaces this one
+      if (isV2(remote) && vk.wraps && (remote.savedAt ?? 0) > (loadSealed()?.savedAt ?? 0)) vk = { ...vk, wraps: { ...vk.wraps, recovery: remote.wraps.recovery } };
       // the session holds this device's lists, so items removed by the other device's tombstones are not re-stamped
       setSession({ vk, cards, docs, deleted: both });
       sessionRef.current = { vk, cards, docs, deleted: both };
@@ -141,6 +166,14 @@ export function App() {
         if (local) await push(local);
       } else if (!local) {
         await adopt(remote);
+      } else if (keyOf(remote) !== keyOf(local)) {
+        // upgraded on another device: join it with the recovery key, which merges this device's cards in. An older
+        // copy in Drive (v1) is replaced by this upgraded one; that device joins in the same way.
+        if (isV2(remote)) {
+          setJoinRemote(remote);
+          return setSync({ status: "error", email: account(), message: JOIN_MESSAGE });
+        }
+        if (isV2(local)) await push(local);
       } else if (remoteAt === localAt) {
         setMeta({ syncedAt: remoteAt, dirty: false });
       } else if (m.syncedAt === 0 || (m.dirty && remoteAt > m.syncedAt)) {
@@ -160,6 +193,49 @@ export function App() {
     }
   }, [adopt, merge]);
 
+  /**
+   * An older vault (sealed straight with the PIN) gets a master key and a recovery key, so the copies that leave the
+   * device stop being crackable from the PIN. A wallet already upgraded on another device is joined instead, so there
+   * is one recovery key; a newer older-format Drive copy is merged in first.
+   */
+  const upgrade = useCallback(async (old: VaultKey, data: VaultData, pin: string) => {
+    let cards = data.cards, docs = data.docs ?? [], deleted = data.deleted ?? {};
+    sessionRef.current = { vk: old, cards, docs, deleted };
+    setSession(sessionRef.current);
+    if (account() && token()) {
+      const remote = await pull().catch(() => null);
+      if (remote && isV2(remote)) {
+        setJoinRemote(remote);
+        return setSync({ status: "error", email: account(), message: JOIN_MESSAGE });
+      }
+      if (remote && remote.savedAt !== loadSealed()?.savedAt) {
+        try {
+          const theirs = await openVault<VaultData>(remote, await deriveKey(pin, remote.salt, remote.iter));
+          deleted = mergeTombstones(deleted, theirs.deleted);
+          cards = mergeLive(cards, theirs.cards, deleted);
+          docs = mergeLive(docs, theirs.docs ?? [], deleted);
+        } catch { /* a different PIN there: that device joins with the recovery key and merges its own cards */ }
+      }
+    }
+    const recovery = newRecoveryKey();
+    await persist(cards, await createKeys(pin, recovery), docs, deleted);
+    setRecoveryShown(recovery);
+  }, [persist]);
+
+  /** Takes the master key of the wallet in Drive (opened with its recovery key) and merges this device's cards in. */
+  const join = useCallback(async (recovery: string, pin: string) => {
+    const open = sessionRef.current;
+    const local = loadSealed();
+    if (!joinRemote || !isV2(joinRemote) || !open || !local) return;
+    // the PIN stays this device's PIN, so a typo cannot lock the wallet
+    await unlock(local, pin).catch(() => { throw new Error("Wrong PIN for this device."); });
+    const { data, vk } = await unlockWithRecovery<VaultData>(joinRemote, recovery);
+    const both = mergeTombstones(open.deleted, data.deleted);
+    sessionRef.current = { ...open, deleted: both };
+    await persist(mergeLive(open.cards, data.cards, both), await rewrapLocal(vk, pin), mergeLive(open.docs, data.docs ?? [], both), both);
+    setJoinRemote(null);
+  }, [joinRemote, persist]);
+
   useEffect(() => {
     const back = takeRedirect();
     if (back && !back.ok) setSync({ status: "error", email: account(), message: back.error === "interaction_required" || back.error === "login_required" ? "Sign in again to sync." : back.error });
@@ -172,14 +248,15 @@ export function App() {
   return (
     <ToastHost>
       {!session || !sealed ? (
-        <Lock sealed={sealed} onCreated={(s) => { setSealed(s); void syncNow(); }} onOpen={(vk, data, secret) => {
+        <Lock sealed={sealed} onCreated={(s) => { setSealed(s); void syncNow(); }} onOpen={(vk, data, secret, recovery) => {
           setKnownPin(isPin(secret) ? secret : null); // kept only while unlocked, so Face ID can be set up without retyping it
+          if (recovery) setRecoveryShown(recovery);
           const remote = pendingMerge.current;
           const docs = data.docs ?? [];
           const deleted = data.deleted ?? {};
-          if (remote) void merge(remote, vk, data.cards, docs, deleted);
-          // an older vault opened with nine digits is re-sealed once, so it is marked as a PIN vault from now on
-          else if (vk.pin && sealed && !sealed.pin) { sessionRef.current = { vk, cards: data.cards, docs, deleted }; void persist(data.cards, vk, docs); }
+          // an older vault opened with nine digits gets a recovery key (a letters passphrase does when it switches to a PIN)
+          if (!vk.raw && isPin(secret)) void upgrade(vk, data, secret);
+          else if (remote) void merge(remote, vk, data.cards, docs, deleted);
           else setSession({ vk, cards: data.cards, docs, deleted });
         }} />
       ) : (
@@ -198,7 +275,22 @@ export function App() {
             cards: session.cards,
             docs: session.docs,
             onReplace: (cards, docs) => persist(cards, session.vk, docs),
-            onRekey: (vk) => { if (bioOn) { bioForget(); setBioOn(false); } setKnownPin(null); return persist(session.cards, vk); },
+            onRekey: (vk, recovery) => {
+              if (bioOn) { bioForget(); setBioOn(false); }
+              setKnownPin(null);
+              if (recovery) setRecoveryShown(recovery);
+              return persist(session.cards, vk);
+            },
+            recovery: {
+              on: !!session.vk.raw,
+              onNew: async () => {
+                const code = newRecoveryKey();
+                await persist(session.cards, await rewrapRecovery(session.vk, code));
+                setRecoveryShown(code);
+              },
+              join: !!joinRemote,
+              onJoin: join,
+            },
             onErase: () => { eraseSealed(); bioForget(); setBioOn(false); setSealed(null); setSession(null); },
             bio: {
               label: bioLabel(),
@@ -220,6 +312,7 @@ export function App() {
           }}
         />
       )}
+      {recoveryShown && session && <RecoverySheet code={recoveryShown} onDone={() => setRecoveryShown(null)} />}
     </ToastHost>
   );
 }
@@ -335,6 +428,14 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
             <Icon name="key" />
             <span className="grow">Switch from your passphrase to a 9-digit PIN to unlock with the number pad.</span>
             <button className="btn sm" onClick={() => setShowSettings(true)}>Switch</button>
+          </div>
+        )}
+
+        {settings.recovery.join && (
+          <div className="banner">
+            <Icon name="key" />
+            <span className="grow">This wallet was upgraded on another device. Enter its recovery key to keep syncing.</span>
+            <button className="btn sm" onClick={() => setShowSettings(true)}>Enter</button>
           </div>
         )}
 

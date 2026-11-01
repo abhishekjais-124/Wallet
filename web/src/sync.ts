@@ -3,7 +3,7 @@
  * and the cards in plain text never leave the device. The newest `savedAt` wins; a device with unsynced edits
  * merges instead (see App), so an offline edit on one device is not overwritten by the other.
  */
-import { isSealedVault, type SealedVault } from "@shared/vault.ts";
+import { forRemote, isSealedVault, type SealedVault } from "@shared/vault.ts";
 import { rememberAccount, token } from "./google.ts";
 
 const FILE = "wallet-vault.json";
@@ -77,8 +77,9 @@ export async function pull(): Promise<SealedVault | null> {
   }
 }
 
+/** Uploads the vault without this device's PIN wrap: the Drive copy opens only with the recovery key. */
 export async function push(sealed: SealedVault): Promise<void> {
-  const body = JSON.stringify(sealed);
+  const body = JSON.stringify(forRemote(sealed));
   const id = await fileId();
   if (id) {
     await call(`/upload/drive/v3/files/${id}?uploadType=media`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body });

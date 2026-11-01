@@ -3,7 +3,7 @@
 A personal card wallet in the style of [OFD](https://aj124.com/OFD). Keep every credit and debit card in one
 place, shown as a realistic digital card that keeps the bank's colours, with copy buttons for each detail.
 
-Cards are encrypted in the browser with your 9-digit PIN. They live on the device, and optionally sync between
+Cards are encrypted in the browser and unlocked with your 9-digit PIN. They live on the device, and optionally sync between
 devices through a hidden app folder in your own Google Drive. The server ships the app and nothing else.
 
 ## Quick start
@@ -44,9 +44,10 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 
 | What | How |
 | --- | --- |
-| Encryption | The 9-digit PIN (older vaults: a passphrase) is stretched with PBKDF2-SHA256 (600,000 iterations, random 16-byte salt) into a non-extractable AES-256-GCM key (`shared/vault.ts`). The whole card list is sealed as one blob with a fresh IV on every save. |
+| Encryption | The vault is sealed with a random 256-bit master key (AES-256-GCM, fresh IV on every save, `shared/vault.ts`). The master key is stored only wrapped: by the PIN (PBKDF2-SHA256, 600,000 iterations, random salt) on this device, and by the recovery key (24 random characters, ~120 bits) for the Google Drive copy and backup files. Older vaults (sealed straight with the PIN) are upgraded at the next PIN unlock. |
 | Storage | The sealed vault is written to `localStorage`; encrypted ID files to IndexedDB and, when signed in, the Google Drive app folder. Plaintext lives in memory while unlocked. Nothing is sent to the app's server. |
-| PIN | Nine digits on a phone-style number pad. Never stored. There is no recovery: a forgotten PIN means the cards cannot be decrypted. A 9-digit PIN is far weaker than a long passphrase against someone who steals the vault or a backup file and tests PINs offline, so keep backup files private. |
+| PIN | Nine digits on a phone-style number pad. Never stored. It wraps the master key on this device only; the PIN wrap is never uploaded or exported, so a stolen Drive copy or backup cannot be opened by trying PINs. Someone with the unlocked device's storage could still try PINs offline. |
+| Recovery key | Shown once when the wallet is made or upgraded (copy, save as file). Never stored. Opens the Drive copy or a backup on a new device, which then sets its own PIN. Settings → Make a new recovery key re-wraps the master key; older backups still open with the old key. Losing both the PIN and the recovery key means the data cannot be decrypted. |
 | Face ID / Touch ID | Optional, per device (`web/src/bio.ts`). A passkey on the device's own authenticator is created with the WebAuthn PRF extension; the secret it returns after a successful biometric check is run through HKDF and wraps the PIN with AES-GCM. Only the wrapped PIN is stored, on that device. Unlocking still derives the vault key from the PIN. Changing the PIN, erasing the wallet, or a wrap that no longer opens turns it off. Needs iOS 18 / Safari 18 / a recent Chrome; otherwise the section says so and the PIN pad is the only way in. |
 | Masking | Number and CVV are masked by default. Revealing them hides them again after 20 seconds. |
 | Clipboard | A copied number or CVV is overwritten in the clipboard after 30 seconds (best effort: browsers allow this only while the page is focused). |
@@ -57,14 +58,16 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 **Sync with Google.** Settings → Sign in with Google (or "Restore with Google" on a new device). Sign-in is a
 full-page redirect (OAuth implicit token flow, scope `drive.appdata` only), so it works inside the Home Screen app.
 Only the sealed vault is uploaded, as `wallet-vault.json` in the Drive app-data folder, which is invisible in Drive
-and readable only by this OAuth client. Each device still needs the PIN. The newest save wins; a device with
+and readable only by this OAuth client. The uploaded copy carries only the recovery wrap: a new device opens it with
+the recovery key once, then sets its own PIN. A device still on the older format that finds an upgraded copy asks for
+the recovery key and merges its own cards in, so there is only ever one master key. The newest save wins; a device with
 unsynced edits merges instead: the newest copy of each card and ID, minus anything deleted on either device. Deletes
 are recorded as tombstones in the vault (kept 180 days), so a delete is not undone by the other device's older copy;
 an edit made after a delete elsewhere wins. The 1-hour access token is kept in `localStorage`; when
 it runs out, the app does one silent redirect to Google at the next launch.
 
-**Backups.** Settings → Export backup downloads the sealed vault as JSON. It opens only with the passphrase it was made
-with. Import merges cards into the current vault (the more recently edited copy of a card wins). On a new device,
+**Backups.** Settings → Export backup downloads the sealed vault (and encrypted ID files) as JSON. It opens with the
+recovery key; backups made before the upgrade open with the PIN they were made with. Import merges cards into the current vault (the more recently edited copy of a card wins). On a new device,
 "Restore from a backup" on the first screen installs it directly.
 
 **Eviction.** Safari can clear website storage after 7 days without a visit unless the app is added to the Home

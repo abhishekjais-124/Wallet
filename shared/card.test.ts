@@ -89,3 +89,26 @@ describe("sync deletions", () => {
     expect(mergeTombstones({ old: 1 }, {}, 200 * 864e5)).toEqual({});
   });
 });
+
+describe("vault v2 with recovery key", () => {
+  it("opens with the PIN here, with the recovery key elsewhere, never with the PIN from a remote copy", async () => {
+    const { createKeys, seal, unlock, unlockWithRecovery, forRemote, newRecoveryKey, rewrapLocal, NeedsRecoveryError, WrongPassphraseError, isSealedVault } = await import("./vault.ts");
+    const recovery = newRecoveryKey();
+    expect(recovery).toMatch(/^([A-Z2-9]{4}-){5}[A-Z2-9]{4}$/);
+    const vk = await createKeys("123456789", recovery);
+    const local = await seal({ cards: [1] }, vk);
+    expect(isSealedVault(local)).toBe(true);
+    expect((await unlock(local, "123456789")).data).toEqual({ cards: [1] });
+    await expect(unlock(local, "000000000")).rejects.toBeInstanceOf(WrongPassphraseError);
+    // the copy that leaves the device has no PIN wrap: the PIN is useless against it
+    const remote = forRemote(local);
+    expect(JSON.stringify(remote)).not.toContain(JSON.stringify((local as { wraps: { local: unknown } }).wraps.local));
+    await expect(unlock(remote, "123456789")).rejects.toBeInstanceOf(NeedsRecoveryError);
+    // a new device: recovery key (any case, spaces), then its own PIN
+    const fresh = await unlockWithRecovery(remote as never, recovery.toLowerCase().replace(/-/g, " "));
+    expect(fresh.data).toEqual({ cards: [1] });
+    const mine = await seal({ cards: [1, 2] }, await rewrapLocal(fresh.vk, "987654321"));
+    expect((await unlock(mine, "987654321")).data).toEqual({ cards: [1, 2] });
+    await expect(unlockWithRecovery(remote as never, newRecoveryKey())).rejects.toBeInstanceOf(WrongPassphraseError);
+  });
+});
