@@ -40,13 +40,13 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
         <div className="action-bar" role="toolbar" aria-label="Card actions">
           <button className={`action is-fav${card.favorite ? " on" : ""}`} onClick={onToggleFavorite} aria-pressed={card.favorite}
             aria-label={card.favorite ? "Remove from favourites" : "Add to favourites"} title={card.favorite ? "Favourite" : "Add to favourites"}>
-            <Icon name="star" size={21} />
+            <Icon name="star" size={24} />
           </button>
-          <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={21} /></button>
-          <button className="action is-edit" onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={21} /></button>
+          <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={24} /></button>
+          <button className="action is-edit" onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={24} /></button>
           <button className={`action is-danger${confirmDelete ? " armed" : ""}`} aria-label={confirmDelete ? "Tap again to delete" : "Delete"} title="Delete"
             onClick={() => { if (confirmDelete) onDelete(); else { setConfirmDelete(true); toast("Tap again to delete"); } }}>
-            <Icon name={confirmDelete ? "check" : "trash"} size={21} />
+            <Icon name={confirmDelete ? "check" : "trash"} size={24} />
           </button>
         </div>
 
