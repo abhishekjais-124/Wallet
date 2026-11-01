@@ -166,15 +166,18 @@ p { margin: 0; }
 .sort { flex: none; min-height: 36px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); padding: 0 10px; font: inherit; font-size: 13px; }
 
 /* ---- card grid ---- */
-.card-grid { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 26px 20px; }
+.card-grid { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: 1fr; gap: 22px 20px; }
 @media (min-width: 640px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 980px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
 .card-grid li { content-visibility: auto; contain-intrinsic-size: auto 280px; animation: rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both; animation-delay: calc(min(var(--i), 12) * 45ms); }
 @keyframes rise { from { opacity: 0; transform: translateY(14px) scale(0.98); } }
-.card-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 12px 6px 0; }
-.card-name { font-weight: 620; font-size: 15px; letter-spacing: -0.01em; display: inline-flex; gap: 6px; align-items: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.card-name svg { color: var(--fav); }
-.card-sub { color: var(--text-3); font-size: 12.5px; display: inline-flex; gap: 6px; align-items: center; flex: none; }
+.card-grid li { position: relative; }
+/* favourite and expiry badges ride on the card's top edge */
+.card-badges { position: absolute; top: -9px; right: 14px; z-index: 2; display: flex; gap: 6px; pointer-events: none; }
+.card-badges .chip { box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25); background: var(--surface); }
+.card-badges .chip.danger { background: #fde7e5; color: #c62f23; }
+.card-badges .chip.warn { background: #fff3dc; color: #9a5b00; }
+.card-badges .chip.fav { color: var(--fav); padding: 3px 6px; }
 
 /* ---- card face ---- */
 .cardface {

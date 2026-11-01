@@ -321,13 +321,12 @@ const CardTile = React.memo(function CardTile({ card: c, index, onOpen }: { card
   return (
     <li style={{ "--i": index } as React.CSSProperties}>
       <CardFace card={c} onClick={open} label={`Open ${c.nickname || c.bank} ending ${last4(c.number)}`} />
-      <div className="card-meta">
-        <span className="card-name">{c.favorite && <Icon name="star" size={13} />}{c.nickname || c.bank}</span>
-        <span className="card-sub">
+      {(c.favorite || exp !== "ok") && (
+        <div className="card-badges">
+          {c.favorite && <span className="chip fav"><Icon name="star" size={11} /></span>}
           {exp !== "ok" && <span className={`chip ${exp === "expired" ? "danger" : "warn"}`}>{exp === "expired" ? "Expired" : "Expires soon"}</span>}
-          {c.category}
-        </span>
-      </div>
+        </div>
+      )}
     </li>
   );
 });
