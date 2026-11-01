@@ -15,13 +15,14 @@ export const IdFace = React.memo(function IdFace({ doc, reveal = false, onClick,
   onClick?: () => void;
   label?: string;
 }) {
-  const Tag = onClick ? "button" : "div";
   const number = doc.number ? (reveal ? formatDocNumber(doc.type, doc.number) : maskDocNumber(doc.type, doc.number)) : "—";
   const photo = doc.files.find((f) => f.type.startsWith("image/"));
   const pdfs = doc.files.filter((f) => f.type === "application/pdf").length;
   const photos = doc.files.length - pdfs;
   return (
-    <Tag className={`idface is-${doc.type}`} onClick={onClick} aria-label={label} type={onClick ? "button" : undefined}>
+    // a div, not a <button>: Safari on iPhone hides in-flow text inside a <button> that is also a size container
+    <div className={`idface is-${doc.type}${onClick ? " clickable" : ""}`} onClick={onClick} aria-label={label}
+      {...(onClick ? { role: "button", tabIndex: 0, onKeyDown: (e: React.KeyboardEvent) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onClick(); } } } : {})}>
       <div className="id-inner">
         <div className="id-band" />
         <DocMark type={doc.type} className="id-watermark" />
@@ -50,7 +51,7 @@ export const IdFace = React.memo(function IdFace({ doc, reveal = false, onClick,
           {photo && <span className="id-thumb" aria-hidden="true"><img src={photo.data} alt="" draggable={false} /></span>}
         </div>
       </div>
-    </Tag>
+    </div>
   );
 });
 

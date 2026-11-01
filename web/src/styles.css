@@ -367,24 +367,26 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 .idface {
   --paper: #fffdf8; --paper-2: #fdf1df; --ink: #1b1c22; --ink-2: #767a88; --accent: #c8541b; --head-ink: #1b1c22;
   --band: linear-gradient(90deg, #ff9933 0 33.3%, #fff 33.3% 66.6%, #138808 66.6%);
-  display: block; width: 100%; aspect-ratio: 1.72; padding: 0; border: 0; background: none; cursor: default; text-align: left;
-  container-type: inline-size; border-radius: 5cqw; color: var(--ink); -webkit-tap-highlight-color: transparent;
+  display: block; width: 100%; text-align: left; container-type: inline-size; border-radius: 5cqw; color: var(--ink);
+  -webkit-tap-highlight-color: transparent; outline: none;
 }
-button.idface { cursor: pointer; }
+.idface.clickable { cursor: pointer; }
+.idface.clickable:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); }
+.idface.clickable:active .id-inner { scale: 0.985; }
 .idface.is-pan { --paper: #f3f7fd; --paper-2: #d9e6f7; --accent: #1d4f91; --head-ink: #1d4f91; --band: linear-gradient(90deg, #1d4f91, #3a7bd5); }
 .idface.is-dl { --paper: #f2fbf9; --paper-2: #d2eee8; --accent: #0f766e; --head-ink: #0f766e; --band: linear-gradient(90deg, #0f766e, #19b3a2); }
 .id-inner {
-  position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 5cqw;
+  position: relative; width: 100%; overflow: hidden; border-radius: 5cqw;
   background: radial-gradient(110% 80% at 100% 0%, var(--paper-2), transparent 60%), linear-gradient(165deg, var(--paper), var(--paper-2));
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) inset, 0 20px 36px -22px rgba(0, 0, 0, 0.4), 0 5px 12px -8px rgba(0, 0, 0, 0.2);
-  transition: translate var(--spring);
+  transition: translate var(--spring), scale var(--ease);
 }
 /* faint guilloche lines, like the security print on real IDs */
 .id-inner::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.45;
   background: repeating-radial-gradient(circle at 92% 115%, transparent 0 2cqw, rgba(0, 0, 0, 0.035) 2cqw 2.2cqw);
 }
-@media (hover: hover) { button.idface:hover .id-inner { translate: 0 -4px; } }
+@media (hover: hover) { .idface.clickable:hover .id-inner { translate: 0 -4px; } }
 .id-band { position: absolute; left: 0; right: 0; top: 0; height: 1.8cqw; background: var(--band); }
 .id-watermark { position: absolute; right: -7cqw; bottom: -9cqw; width: 44cqw; height: 44cqw; color: var(--accent); opacity: 0.07; pointer-events: none; }
 .is-aadhaar .id-watermark { opacity: 0.12; }
@@ -396,14 +398,14 @@ button.idface { cursor: pointer; }
 .id-files { display: inline-flex; gap: 1.6cqw; flex: none; }
 .id-files span { display: inline-flex; align-items: center; gap: 0.9cqw; padding: 0.9cqw 2.2cqw; border-radius: 999px; font-size: 2.8cqw; font-weight: 700; color: var(--ink-2); background: rgba(255, 255, 255, 0.75); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06) inset; }
 .id-files svg { width: 3cqw; height: 3cqw; }
-.id-body { position: relative; z-index: 1; display: flex; align-items: flex-end; justify-content: space-between; gap: 4cqw; padding: 5cqw 5.5cqw 5cqw; }
-.id-fields { display: flex; flex-direction: column; gap: 1.5cqw; min-width: 0; }
+.id-body { position: relative; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 4cqw; padding: 4.4cqw 5.5cqw 5.4cqw; }
+.id-fields { display: flex; flex-direction: column; gap: 1.4cqw; min-width: 0; flex: 1; }
 .id-name { font-size: 4cqw; font-weight: 700; letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.id-number { font-family: var(--mono); font-size: 6.4cqw; font-weight: 650; letter-spacing: 0.1em; color: var(--accent); white-space: nowrap; line-height: 1.15; }
+.id-number { font-family: var(--mono); font-size: 5.6cqw; font-weight: 650; letter-spacing: 0.06em; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: clip; line-height: 1.15; }
 .id-meta { display: flex; gap: 4.5cqw; margin-top: 0.8cqw; font-family: var(--mono); font-size: 3.3cqw; font-weight: 600; color: var(--ink); }
 .id-meta span { display: flex; flex-direction: column; gap: 0.3cqw; }
 .id-meta small { font-family: var(--font); font-size: 2.4cqw; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); font-weight: 650; }
-.id-thumb { flex: none; width: 23cqw; aspect-ratio: 1.55; border-radius: 2.2cqw; overflow: hidden; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 6px 14px -8px rgba(0, 0, 0, 0.5); transform: rotate(-3deg); background: #fff; }
+.id-thumb { flex: none; width: 21cqw; aspect-ratio: 1.55; border-radius: 2.2cqw; overflow: hidden; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1), 0 6px 14px -8px rgba(0, 0, 0, 0.5); transform: rotate(-3deg); background: #fff; }
 .id-thumb img { width: 100%; height: 100%; object-fit: cover; object-position: top; }
 .doc-files { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; }
 .doc-files h3 { font-size: 13px; color: var(--text-2); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
