@@ -1,5 +1,6 @@
 import React from "react";
 import { cvvLength, formatNumber, inkFor, maskNumber, type Card, type Network } from "@shared/card.ts";
+import { BankMark } from "./BankMark.tsx";
 
 export type FaceCard = Pick<Card, "bank" | "nickname" | "kind" | "network" | "number" | "expiry" | "cvv" | "colors">;
 
@@ -25,7 +26,10 @@ export const CardFace = React.memo(function CardFace({ card, flippable = false, 
       <div className="cf-inner">
         <div className="cf-side cf-front">
           <div className="cf-row">
-            <span className="cf-bank">{card.bank || "Your bank"}</span>
+            <span className="cf-brand">
+              {card.bank && <BankMark bank={card.bank} />}
+              <span className="cf-bank">{card.bank || "Your bank"}</span>
+            </span>
             <span className="cf-kind">{card.kind}</span>
           </div>
           <div className="cf-row cf-chiprow">

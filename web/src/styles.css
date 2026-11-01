@@ -226,11 +226,12 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 .cf-field small { font-size: 2.5cqw; text-transform: uppercase; letter-spacing: 0.12em; color: var(--ink-2); font-weight: 600; }
 .cf-field span { font-size: 3.8cqw; font-weight: 650; letter-spacing: 0.06em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-transform: uppercase; font-family: var(--mono); }
 .cf-product {
-  flex: 1; min-width: 0; align-self: flex-end; padding-bottom: 0.3cqw;
-  font-size: 6.2cqw; font-weight: 700; font-style: italic; letter-spacing: -0.02em; line-height: 1.05;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.18);
+  flex: 1; min-width: 0; align-self: flex-end; padding-bottom: 0.4cqw;
+  font-size: 4.3cqw; font-weight: 650; letter-spacing: 0.01em; line-height: 1.1; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.94;
 }
+.cf-brand { display: inline-flex; align-items: center; gap: 2.2cqw; min-width: 0; }
+.cf-mark { width: 7.4cqw; height: 7.4cqw; flex: none; border-radius: 1.8cqw; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 0 0 0.25cqw rgba(255, 255, 255, 0.18); }
 .cf-net { height: 8cqw; width: auto; flex: none; }
 .cf-net-text { height: auto; font-weight: 900; font-style: italic; font-size: 4.2cqw; }
 .cf-back { transform: rotateY(180deg); display: flex; flex-direction: column; }
