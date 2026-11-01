@@ -51,6 +51,9 @@ describe("vault", () => {
     expect(again.iv).not.toBe(sealed.iv);
     expect(sealed.pin).toBeUndefined();
     expect((await seal({}, await deriveKey("123456789", undefined, 100_000))).pin).toBe(true);
+    // a vault with a few MB of attachments seals and opens (used to overflow the call stack)
+    const big = { files: ["x".repeat(3_000_000)] };
+    expect((await unlock(await seal(big, vk), "correct horse")).data).toEqual(big);
   });
 });
 

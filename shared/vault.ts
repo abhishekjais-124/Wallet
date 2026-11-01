@@ -23,7 +23,12 @@ export const KDF_ITERATIONS = 600_000; // OWASP 2023 guidance for PBKDF2-HMAC-SH
 
 const enc = new TextEncoder();
 const dec = new TextDecoder();
-const b64 = (bytes: Uint8Array): string => btoa(String.fromCharCode(...bytes));
+// in 32 KB chunks: spreading a whole vault (photos, PDFs) into one call overflows the call stack
+const b64 = (bytes: Uint8Array): string => {
+  let s = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(s);
+};
 const unb64 = (s: string): Uint8Array<ArrayBuffer> => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 const random = (n: number): Uint8Array<ArrayBuffer> => crypto.getRandomValues(new Uint8Array(n));
 
