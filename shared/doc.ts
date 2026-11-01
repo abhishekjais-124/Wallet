@@ -73,3 +73,25 @@ export function mergeById<T extends { id: string; updatedAt: number }>(mine: T[]
   for (const x of theirs) if ((byId.get(x.id)?.updatedAt ?? -1) < x.updatedAt) byId.set(x.id, x);
   return [...byId.values()];
 }
+
+/** id → when it was deleted (ms). Kept in the vault so a sync can tell "deleted here" from "new there". */
+export type Tombstones = Record<string, number>;
+
+const TOMBSTONE_TTL = 180 * 864e5;
+
+/** Both devices' deletions; the later time wins, and entries older than 180 days are dropped. */
+export function mergeTombstones(a: Tombstones = {}, b: Tombstones = {}, now = Date.now()): Tombstones {
+  const out: Tombstones = {};
+  for (const [id, at] of [...Object.entries(a), ...Object.entries(b)]) {
+    if (now - at < TOMBSTONE_TTL && at > (out[id] ?? 0)) out[id] = at;
+  }
+  return out;
+}
+
+/**
+ * Two devices' lists after a sync: newest copy of each item, minus items deleted on either side. An item edited after
+ * it was deleted elsewhere is kept, because that edit is the newer intent.
+ */
+export function mergeLive<T extends { id: string; updatedAt: number }>(mine: T[], theirs: T[], deleted: Tombstones): T[] {
+  return mergeById(mine, theirs).filter((x) => !((deleted[x.id] ?? 0) >= x.updatedAt));
+}

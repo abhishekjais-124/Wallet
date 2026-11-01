@@ -73,3 +73,19 @@ describe("id documents", () => {
     expect(merged.map((x) => `${x.id}${x.updatedAt}`).sort()).toEqual(["a3", "b5", "c1"]);
   });
 });
+
+describe("sync deletions", () => {
+  it("a delete on one device survives a merge with the other", async () => {
+    const { mergeLive, mergeTombstones } = await import("./doc.ts");
+    const now = 1_000_000;
+    // phone deleted b at 500; laptop still has b (last edit 100) and added c
+    const phone = { items: [{ id: "a", updatedAt: 10 }], deleted: { b: 500 } };
+    const laptop = { items: [{ id: "a", updatedAt: 10 }, { id: "b", updatedAt: 100 }, { id: "c", updatedAt: 600 }], deleted: {} };
+    const deleted = mergeTombstones(phone.deleted, laptop.deleted, now);
+    expect(mergeLive(phone.items, laptop.items, deleted).map((x) => x.id).sort()).toEqual(["a", "c"]);
+    // an edit made after the delete wins
+    expect(mergeLive([], [{ id: "b", updatedAt: 700 }], deleted).map((x) => x.id)).toEqual(["b"]);
+    // old tombstones expire
+    expect(mergeTombstones({ old: 1 }, {}, 200 * 864e5)).toEqual({});
+  });
+});

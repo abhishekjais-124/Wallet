@@ -58,8 +58,9 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 full-page redirect (OAuth implicit token flow, scope `drive.appdata` only), so it works inside the Home Screen app.
 Only the sealed vault is uploaded, as `wallet-vault.json` in the Drive app-data folder, which is invisible in Drive
 and readable only by this OAuth client. Each device still needs the PIN. The newest save wins; a device with
-unsynced edits merges instead (union of cards, the more recently edited copy of each card wins), so a card deleted on
-one device while the other had offline edits can come back. The 1-hour access token is kept in `localStorage`; when
+unsynced edits merges instead: the newest copy of each card and ID, minus anything deleted on either device. Deletes
+are recorded as tombstones in the vault (kept 180 days), so a delete is not undone by the other device's older copy;
+an edit made after a delete elsewhere wins. The 1-hour access token is kept in `localStorage`; when
 it runs out, the app does one silent redirect to Google at the next launch.
 
 **Backups.** Settings → Export backup downloads the sealed vault as JSON. It opens only with the passphrase it was made

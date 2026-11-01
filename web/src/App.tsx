@@ -1,6 +1,6 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { digits, expiryState, last4, NETWORK_LABEL, type Card } from "@shared/card.ts";
-import { mergeById, type IdDoc } from "@shared/doc.ts";
+import { mergeLive, mergeTombstones, type IdDoc, type Tombstones } from "@shared/doc.ts";
 import { isPin, open as openVault, seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
 import { available as bioAvailable, bioLabel, enrolled as bioEnrolled, forget as bioForget } from "./bio.ts";
 import { bioIcon, BioSetup } from "./components/BioSetup.tsx";
@@ -20,6 +20,7 @@ interface Session {
   vk: VaultKey;
   cards: Card[];
   docs: IdDoc[];
+  deleted: Tombstones;
 }
 
 export interface SyncState {
@@ -64,12 +65,21 @@ export function App() {
     );
   }, []);
 
-  // every change re-seals the whole vault with a fresh IV before the UI shows it; docs default to the open ones
-  const persist = useCallback(async (cards: Card[], vk: VaultKey, docs: IdDoc[] = sessionRef.current?.docs ?? []) => {
-    const s = await seal({ cards, docs }, vk);
+  // every change re-seals the whole vault with a fresh IV before the UI shows it; docs default to the open ones.
+  // Anything that was open before and is gone now was deleted here: it gets a tombstone so a merge with another
+  // device does not bring it back. Anything present has none (a restore or an edit after a delete wins).
+  const persist = useCallback(async (cards: Card[], vk: VaultKey, docs: IdDoc[] = sessionRef.current?.docs ?? [], base?: Tombstones) => {
+    const prev = sessionRef.current;
+    const deleted: Tombstones = { ...(base ?? prev?.deleted ?? {}) };
+    const now = Date.now();
+    const present = new Set([...cards, ...docs].map((x) => x.id));
+    for (const x of [...(prev?.cards ?? []), ...(prev?.docs ?? [])]) if (!present.has(x.id)) deleted[x.id] = now;
+    for (const id of present) delete deleted[id];
+    const tombstones = mergeTombstones(deleted, {}, now);
+    const s = await seal({ cards, docs, deleted: tombstones }, vk);
     saveSealed(s);
     setSealed(s);
-    setSession({ vk, cards, docs });
+    setSession({ vk, cards, docs, deleted: tombstones });
     upload(s);
   }, [upload]);
 
@@ -82,21 +92,30 @@ export function App() {
     if (!open) return;
     try {
       const data = await openVault<VaultData>(remote, open.vk);
-      setSession({ vk: open.vk, cards: data.cards, docs: data.docs ?? [] });
+      setSession({ vk: open.vk, cards: data.cards, docs: data.docs ?? [], deleted: data.deleted ?? {} });
     } catch {
       setSession(null);
     }
   }, []);
 
-  /** Both sides changed: union of cards and of documents, the more recently edited copy of each wins. */
-  const merge = useCallback(async (remote: SealedVault, vk: VaultKey, cards: Card[], docs: IdDoc[]) => {
+  /**
+   * Both sides changed: the newest copy of each card and document, minus anything either device deleted (both
+   * devices' tombstones are combined, so a delete on one is not undone by the other's older copy).
+   */
+  const merge = useCallback(async (remote: SealedVault, vk: VaultKey, cards: Card[], docs: IdDoc[], deleted: Tombstones) => {
     pendingMerge.current = null;
     try {
       const theirs = await openVault<VaultData>(remote, vk);
-      await persist(mergeById(cards, theirs.cards), vk, mergeById(docs, theirs.docs ?? []));
+      const both = mergeTombstones(deleted, theirs.deleted);
+      // the session holds this device's lists, so items removed by the other device's tombstones are not re-stamped
+      setSession({ vk, cards, docs, deleted: both });
+      sessionRef.current = { vk, cards, docs, deleted: both };
+      const liveCards = mergeLive(cards, theirs.cards, both);
+      const liveDocs = mergeLive(docs, theirs.docs ?? [], both);
+      await persist(liveCards, vk, liveDocs, both);
     } catch {
       // still open this device's own cards; only the merge is skipped
-      setSession({ vk, cards, docs });
+      setSession({ vk, cards, docs, deleted });
       setSync({ status: "error", email: account(), message: "The wallet in Google Drive uses a different PIN, so it was not merged. Set the same PIN on both devices, then Sync now." });
     }
   }, [persist]);
@@ -127,7 +146,7 @@ export function App() {
       } else if (m.syncedAt === 0 || (m.dirty && remoteAt > m.syncedAt)) {
         // never synced here, or both sides changed: merge, never overwrite the Drive copy blindly
         const open = sessionRef.current;
-        if (open) await merge(remote, open.vk, open.cards, open.docs);
+        if (open) await merge(remote, open.vk, open.cards, open.docs, open.deleted);
         else pendingMerge.current = remote;
       } else if (m.dirty || localAt > remoteAt) {
         await push(local);
@@ -157,10 +176,11 @@ export function App() {
           setKnownPin(isPin(secret) ? secret : null); // kept only while unlocked, so Face ID can be set up without retyping it
           const remote = pendingMerge.current;
           const docs = data.docs ?? [];
-          if (remote) void merge(remote, vk, data.cards, docs);
+          const deleted = data.deleted ?? {};
+          if (remote) void merge(remote, vk, data.cards, docs, deleted);
           // an older vault opened with nine digits is re-sealed once, so it is marked as a PIN vault from now on
-          else if (vk.pin && sealed && !sealed.pin) void persist(data.cards, vk, docs);
-          else setSession({ vk, cards: data.cards, docs });
+          else if (vk.pin && sealed && !sealed.pin) { sessionRef.current = { vk, cards: data.cards, docs, deleted }; void persist(data.cards, vk, docs); }
+          else setSession({ vk, cards: data.cards, docs, deleted });
         }} />
       ) : (
         <WalletView
