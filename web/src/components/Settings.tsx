@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { digits, type Card } from "@shared/card.ts";
+import { mergeById, type IdDoc } from "@shared/doc.ts";
 import { deriveKey, isPin, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
 import { downloadJson, readSealedFile, type ThemePref, type VaultData } from "../store.ts";
 import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
@@ -27,7 +28,7 @@ export interface BioControls {
   onDismissOffer: () => void;
 }
 
-export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, cards, onReplace, onRekey, onErase, sync, bio, onClose }: {
+export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, cards, docs, onReplace, onRekey, onErase, sync, bio, onClose }: {
   sync: SyncControls;
   bio: BioControls;
   theme: ThemePref;
@@ -36,7 +37,8 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
   onLockMinutes: (m: number) => void;
   sealed: SealedVault;
   cards: Card[];
-  onReplace: (cards: Card[]) => Promise<void>;
+  docs: IdDoc[];
+  onReplace: (cards: Card[], docs: IdDoc[]) => Promise<void>;
   onRekey: (vk: VaultKey) => Promise<void>;
   onErase: () => void;
   onClose: () => void;
@@ -67,11 +69,10 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
     setBusy(true);
     try {
       const { data } = await unlock<VaultData>(pending, importPass);
-      // same card in both: the more recently edited copy wins
-      const byId = new Map(cards.map((c) => [c.id, c]));
-      for (const c of data.cards) if ((byId.get(c.id)?.updatedAt ?? -1) < c.updatedAt) byId.set(c.id, c);
-      await onReplace([...byId.values()]);
-      toast(`Imported ${data.cards.length} card${data.cards.length === 1 ? "" : "s"}`);
+      // same card or document in both: the more recently edited copy wins
+      const theirDocs = data.docs ?? [];
+      await onReplace(mergeById(cards, data.cards), mergeById(docs, theirDocs));
+      toast(`Imported ${data.cards.length} card${data.cards.length === 1 ? "" : "s"}${theirDocs.length ? ` and ${theirDocs.length} ID${theirDocs.length === 1 ? "" : "s"}` : ""}`);
       setPending(null);
       setImportPass("");
       setError(null);

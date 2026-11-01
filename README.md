@@ -29,6 +29,12 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
   each category and each network. Sort by recent, bank or expiry. "Expires soon" (60 days) and "Expired" badges.
 * Light, dark or system theme. Phone-first layout, installable PWA, works offline.
 
+* IDs tab: Aadhaar, PAN and driving licence, each drawn as its own card (our own designs, not the government
+  artwork), with name, number (masked to the last four by default), date of birth and, for a licence, valid till.
+  Attach front/back photos (resized to 1600 px JPEG) and/or the PDF (up to 2.5 MB). Share the files, or the details
+  as text with the number masked unless switched on. IDs live in the same encrypted vault, so they sync, back up and
+  import with the cards; browser storage holds a few MB in all, so prefer photos over large PDFs.
+
 ## Security model
 
 | What | How |

@@ -1,5 +1,6 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { digits, expiryState, last4, NETWORK_LABEL, type Card } from "@shared/card.ts";
+import { mergeById, type IdDoc } from "@shared/doc.ts";
 import { isPin, open as openVault, seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
 import { available as bioAvailable, bioLabel, enrolled as bioEnrolled, forget as bioForget } from "./bio.ts";
 import { bioIcon, BioSetup } from "./components/BioSetup.tsx";
@@ -7,6 +8,7 @@ import { account, CLIENT_ID, signIn, signOut, takeRedirect, token } from "./goog
 import { clearMeta, meta, pull, push, setMeta, whoAmI } from "./sync.ts";
 import { CardFace } from "./components/CardFace.tsx";
 import { Detail } from "./components/Detail.tsx";
+import { DocsView } from "./components/Docs.tsx";
 import { Editor } from "./components/Editor.tsx";
 import { Lock } from "./components/Lock.tsx";
 import { Settings } from "./components/Settings.tsx";
@@ -16,6 +18,7 @@ import { Icon, ToastHost } from "./ui.tsx";
 interface Session {
   vk: VaultKey;
   cards: Card[];
+  docs: IdDoc[];
 }
 
 export interface SyncState {
@@ -60,12 +63,12 @@ export function App() {
     );
   }, []);
 
-  // every change re-seals the whole vault with a fresh IV before the UI shows it
-  const persist = useCallback(async (cards: Card[], vk: VaultKey) => {
-    const s = await seal({ cards }, vk);
+  // every change re-seals the whole vault with a fresh IV before the UI shows it; docs default to the open ones
+  const persist = useCallback(async (cards: Card[], vk: VaultKey, docs: IdDoc[] = sessionRef.current?.docs ?? []) => {
+    const s = await seal({ cards, docs }, vk);
     saveSealed(s);
     setSealed(s);
-    setSession({ vk, cards });
+    setSession({ vk, cards, docs });
     upload(s);
   }, [upload]);
 
@@ -77,23 +80,22 @@ export function App() {
     const open = sessionRef.current;
     if (!open) return;
     try {
-      setSession({ vk: open.vk, cards: (await openVault<VaultData>(remote, open.vk)).cards });
+      const data = await openVault<VaultData>(remote, open.vk);
+      setSession({ vk: open.vk, cards: data.cards, docs: data.docs ?? [] });
     } catch {
       setSession(null);
     }
   }, []);
 
-  /** Both sides changed: union of the cards, the more recently edited copy of each card wins. */
-  const merge = useCallback(async (remote: SealedVault, vk: VaultKey, cards: Card[]) => {
+  /** Both sides changed: union of cards and of documents, the more recently edited copy of each wins. */
+  const merge = useCallback(async (remote: SealedVault, vk: VaultKey, cards: Card[], docs: IdDoc[]) => {
     pendingMerge.current = null;
     try {
-      const theirs = (await openVault<VaultData>(remote, vk)).cards;
-      const byId = new Map(cards.map((c) => [c.id, c]));
-      for (const c of theirs) if ((byId.get(c.id)?.updatedAt ?? -1) < c.updatedAt) byId.set(c.id, c);
-      await persist([...byId.values()], vk);
+      const theirs = await openVault<VaultData>(remote, vk);
+      await persist(mergeById(cards, theirs.cards), vk, mergeById(docs, theirs.docs ?? []));
     } catch {
       // still open this device's own cards; only the merge is skipped
-      setSession({ vk, cards });
+      setSession({ vk, cards, docs });
       setSync({ status: "error", email: account(), message: "The wallet in Google Drive uses a different PIN, so it was not merged. Set the same PIN on both devices, then Sync now." });
     }
   }, [persist]);
@@ -124,7 +126,7 @@ export function App() {
       } else if (m.syncedAt === 0 || (m.dirty && remoteAt > m.syncedAt)) {
         // never synced here, or both sides changed: merge, never overwrite the Drive copy blindly
         const open = sessionRef.current;
-        if (open) await merge(remote, open.vk, open.cards);
+        if (open) await merge(remote, open.vk, open.cards, open.docs);
         else pendingMerge.current = remote;
       } else if (m.dirty || localAt > remoteAt) {
         await push(local);
@@ -152,15 +154,18 @@ export function App() {
         <Lock sealed={sealed} onCreated={(s) => { setSealed(s); void syncNow(); }} onOpen={(vk, data, secret) => {
           setKnownPin(isPin(secret) ? secret : null); // kept only while unlocked, so Face ID can be set up without retyping it
           const remote = pendingMerge.current;
-          if (remote) void merge(remote, vk, data.cards);
+          const docs = data.docs ?? [];
+          if (remote) void merge(remote, vk, data.cards, docs);
           // an older vault opened with nine digits is re-sealed once, so it is marked as a PIN vault from now on
-          else if (vk.pin && sealed && !sealed.pin) void persist(data.cards, vk);
-          else setSession({ vk, cards: data.cards });
+          else if (vk.pin && sealed && !sealed.pin) void persist(data.cards, vk, docs);
+          else setSession({ vk, cards: data.cards, docs });
         }} />
       ) : (
         <WalletView
           cards={session.cards}
           save={(cards) => persist(cards, session.vk)}
+          docs={session.docs}
+          saveDocs={(docs) => persist(session.cards, session.vk, docs)}
           onLock={lock}
           settings={{
             theme,
@@ -169,7 +174,8 @@ export function App() {
             onLockMinutes: (m) => { setLockMinutes(m); setPref("lockMinutes", m); },
             sealed,
             cards: session.cards,
-            onReplace: (cards) => persist(cards, session.vk),
+            docs: session.docs,
+            onReplace: (cards, docs) => persist(cards, session.vk, docs),
             onRekey: (vk) => { if (bioOn) { bioForget(); setBioOn(false); } setKnownPin(null); return persist(session.cards, vk); },
             onErase: () => { eraseSealed(); bioForget(); setBioOn(false); setSealed(null); setSession(null); },
             bio: {
@@ -198,9 +204,11 @@ export function App() {
 
 type SettingsProps = Omit<React.ComponentProps<typeof Settings>, "onClose">;
 
-function WalletView({ cards, save, onLock, settings }: {
+function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   cards: Card[];
   save: (cards: Card[]) => Promise<void>;
+  docs: IdDoc[];
+  saveDocs: (docs: IdDoc[]) => Promise<void>;
   onLock: () => void;
   settings: SettingsProps;
 }) {
@@ -212,6 +220,10 @@ function WalletView({ cards, save, onLock, settings }: {
   const [editing, setEditing] = useState<Card | "new" | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [bioDismissed, setBioDismissed] = useState(false);
+  const [tab, setTabState] = useState<"cards" | "ids">(() => (getPref<string>("tab", "cards") === "ids" ? "ids" : "cards"));
+  const setTab = (t: "cards" | "ids") => { setTabState(t); setPref("tab", t); };
+  const [addingDoc, setAddingDoc] = useState(false);
+  const doneAddingDoc = useCallback(() => setAddingDoc(false), []);
 
   const categories = useMemo(() => [...new Set(cards.map((c) => c.category))].sort(), [cards]);
   const networks = useMemo(() => [...new Set(cards.map((c) => c.network))], [cards]);
@@ -266,10 +278,22 @@ function WalletView({ cards, save, onLock, settings }: {
 
       <main className="page">
         <section className="hero">
-          <span className="eyebrow">{cards.length} card{cards.length === 1 ? "" : "s"} · encrypted on this device</span>
+          <span className="eyebrow">
+            {tab === "cards" ? `${cards.length} card${cards.length === 1 ? "" : "s"}` : `${docs.length} ID${docs.length === 1 ? "" : "s"}`} · encrypted on this device
+          </span>
           <div className="hero-row">
-            <h1>Your cards</h1>
-            <button className="btn primary" onClick={() => setEditing("new")}><Icon name="plus" /> Add card</button>
+            <h1>{tab === "cards" ? "Your cards" : "Your IDs"}</h1>
+            <button className="btn primary" onClick={() => (tab === "cards" ? setEditing("new") : setAddingDoc(true))}>
+              <Icon name="plus" /> {tab === "cards" ? "Add card" : "Add ID"}
+            </button>
+          </div>
+          <div className="tabs" role="tablist" aria-label="Wallet sections">
+            <button role="tab" aria-selected={tab === "cards"} className={tab === "cards" ? "on" : ""} onClick={() => setTab("cards")}>
+              <Icon name="card" size={17} /> Cards <span className="count">{cards.length}</span>
+            </button>
+            <button role="tab" aria-selected={tab === "ids"} className={tab === "ids" ? "on" : ""} onClick={() => setTab("ids")}>
+              <Icon name="idcard" size={17} /> IDs <span className="count">{docs.length}</span>
+            </button>
           </div>
         </section>
 
@@ -292,6 +316,7 @@ function WalletView({ cards, save, onLock, settings }: {
           </div>
         )}
 
+        {tab === "ids" ? <DocsView docs={docs} save={saveDocs} adding={addingDoc} onAdded={doneAddingDoc} /> : <>
         {cards.length > 0 && (
           <div className="toolbar">
             <div className="search">
@@ -327,6 +352,7 @@ function WalletView({ cards, save, onLock, settings }: {
             {shown.map((c, i) => <CardTile key={c.id} card={c} index={i} onOpen={setOpenId} />)}
           </ul>
         )}
+        </>}
       </main>
 
       {open && (

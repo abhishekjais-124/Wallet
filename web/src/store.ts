@@ -1,8 +1,11 @@
 import type { Card } from "@shared/card.ts";
+import type { IdDoc } from "@shared/doc.ts";
 import { isSealedVault, type SealedVault } from "@shared/vault.ts";
 
 export interface VaultData {
   cards: Card[];
+  /** identity documents; absent in vaults made before IDs existed */
+  docs?: IdDoc[];
 }
 
 /** Mount path without a trailing slash: "" at the domain root, "/Wallet" behind aj124.com/Wallet. */

@@ -53,3 +53,20 @@ describe("vault", () => {
     expect((await seal({}, await deriveKey("123456789", undefined, 100_000))).pin).toBe(true);
   });
 });
+
+describe("id documents", () => {
+  it("validates, masks and dates", async () => {
+    const { validDocNumber, maskDocNumber, formatDocNumber, normalizeDate, mergeById } = await import("./doc.ts");
+    expect(validDocNumber("aadhaar", "234567890123")).toBe(true);
+    expect(validDocNumber("aadhaar", "134567890123")).toBe(false);
+    expect(validDocNumber("pan", "ABCDE1234F")).toBe(true);
+    expect(validDocNumber("pan", "ABCD1234F")).toBe(false);
+    expect(formatDocNumber("aadhaar", "234567890123")).toBe("2345 6789 0123");
+    expect(maskDocNumber("aadhaar", "234567890123")).toBe("XXXX XXXX 0123");
+    expect(maskDocNumber("pan", "ABCDE1234F")).toBe("••••••234F");
+    expect(normalizeDate("1/2/1990")).toBe("01/02/1990");
+    expect(normalizeDate("31021990")).toBe(null);
+    const merged = mergeById([{ id: "a", updatedAt: 1 }, { id: "b", updatedAt: 5 }], [{ id: "a", updatedAt: 3 }, { id: "c", updatedAt: 1 }]);
+    expect(merged.map((x) => `${x.id}${x.updatedAt}`).sort()).toEqual(["a3", "b5", "c1"]);
+  });
+});
