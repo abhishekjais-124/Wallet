@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { expiryState, formatNumber, last4, maskNumber, NETWORK_LABEL, type Card } from "@shared/card.ts";
 import { Icon, Sheet, useAutoHide, useCopy } from "../ui.tsx";
 import { CardFace } from "./CardFace.tsx";
+import { ShareCard } from "./Share.tsx";
 
 export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
   card: Card;
@@ -15,7 +16,10 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
   const [showCvv, setShowCvv] = useAutoHide();
   const [flipped, setFlipped] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const exp = expiryState(card.expiry);
+
+  if (sharing) return <ShareCard card={card} onClose={() => setSharing(false)} />;
 
   return (
     <Sheet title={card.nickname || card.bank} onClose={onClose}>
@@ -58,6 +62,7 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
           <button className={`btn${card.favorite ? " fav" : ""}`} onClick={onToggleFavorite} aria-pressed={card.favorite}>
             <Icon name="star" /> {card.favorite ? "Favourite" : "Add to favourites"}
           </button>
+          <button className="btn" onClick={() => setSharing(true)}><Icon name="share" /> Share</button>
           <button className="btn" onClick={onEdit}><Icon name="edit" /> Edit</button>
           <button className={`btn${confirmDelete ? " danger" : ""}`} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}>
             <Icon name="trash" /> {confirmDelete ? "Tap again to delete" : "Delete"}
