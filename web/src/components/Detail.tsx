@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { expiryState, formatNumber, last4, maskNumber, NETWORK_LABEL, type Card } from "@shared/card.ts";
 import { Icon, Sheet, useAutoHide, useCopy } from "../ui.tsx";
 import { CardFace } from "./CardFace.tsx";
@@ -17,6 +17,12 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
   const [flipped, setFlipped] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [sharing, setSharing] = useState(false);
+  // "Confirm?" falls back to "Delete" after a few seconds (taps do not focus buttons on iPhone, so no blur to rely on)
+  useEffect(() => {
+    if (!confirmDelete) return;
+    const t = setTimeout(() => setConfirmDelete(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmDelete]);
   const exp = expiryState(card.expiry);
 
   if (sharing) return <ShareCard card={card} onClose={() => setSharing(false)} />;
@@ -28,6 +34,23 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
           <CardFace card={card} flippable flipped={flipped} reveal={showNumber} revealCvv={showCvv} onClick={() => setFlipped((v) => !v)}
             label={flipped ? "Show the front" : "Show the back"} />
           <p className="fine center"><Icon name="flip" size={14} /> Tap the card to flip it</p>
+        </div>
+
+        <div className="action-bar" role="toolbar" aria-label="Card actions">
+          <button className={`action${card.favorite ? " on" : ""}`} onClick={onToggleFavorite} aria-pressed={card.favorite}>
+            <span className="action-icon"><Icon name="star" size={20} /></span>
+            Favourite
+          </button>
+          <button className="action" onClick={() => setSharing(true)}>
+            <span className="action-icon"><Icon name="share" size={20} /></span>Share
+          </button>
+          <button className="action" onClick={onEdit}>
+            <span className="action-icon"><Icon name="edit" size={20} /></span>Edit
+          </button>
+          <button className={`action danger${confirmDelete ? " armed" : ""}`} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
+>
+            <span className="action-icon"><Icon name="trash" size={20} /></span>{confirmDelete ? "Confirm?" : "Delete"}
+          </button>
         </div>
 
         <div className="rows">
@@ -58,16 +81,6 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
           <Row label="Category" value={card.category} />
         </div>
 
-        <div className="sheet-actions">
-          <button className={`btn${card.favorite ? " fav" : ""}`} onClick={onToggleFavorite} aria-pressed={card.favorite}>
-            <Icon name="star" /> {card.favorite ? "Favourite" : "Add to favourites"}
-          </button>
-          <button className="btn" onClick={() => setSharing(true)}><Icon name="share" /> Share</button>
-          <button className="btn" onClick={onEdit}><Icon name="edit" /> Edit</button>
-          <button className={`btn${confirmDelete ? " danger" : ""}`} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}>
-            <Icon name="trash" /> {confirmDelete ? "Tap again to delete" : "Delete"}
-          </button>
-        </div>
       </div>
     </Sheet>
   );

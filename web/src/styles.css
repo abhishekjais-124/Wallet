@@ -351,6 +351,25 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 .lock-form { display: flex; flex-direction: column; gap: 12px; text-align: left; margin-top: 6px; }
 .lock .fine { justify-content: center; text-align: center; }
 
+/* ---- detail actions ---- */
+.action-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 16px; }
+.action {
+  display: flex; flex-direction: column; align-items: center; gap: 7px; padding: 12px 4px 10px; border: 0; border-radius: 16px;
+  background: var(--surface-2); color: var(--text-2); font-size: 12.5px; font-weight: 600; cursor: pointer;
+  transition: background var(--ease), color var(--ease), transform var(--ease); -webkit-tap-highlight-color: transparent;
+}
+.action:hover { background: var(--surface-3); color: var(--text); }
+.action:active { transform: scale(0.96); }
+.action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.action-icon { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--surface); color: var(--text); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08); transition: background var(--ease), color var(--ease); }
+/* outline star until it is a favourite */
+.action:not(.on) .action-icon svg path { fill: none; stroke: currentColor; stroke-width: 1.8px; stroke-linejoin: round; }
+.action.on { color: var(--text); }
+.action.on .action-icon { background: var(--fav); color: #fff; }
+.action.danger .action-icon { color: var(--danger); }
+.action.danger.armed { background: var(--danger-soft); color: var(--danger); }
+.action.danger.armed .action-icon { background: var(--danger); color: #fff; }
+
 /* ---- share ---- */
 .share { display: flex; flex-direction: column; gap: 16px; }
 .share-preview { border-radius: 18px; overflow: hidden; background: #f4f5f9; aspect-ratio: 1200 / 960; box-shadow: 0 1px 0 var(--border) inset, var(--shadow); }
