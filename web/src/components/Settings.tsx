@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { digits, type Card } from "@shared/card.ts";
 import { mergeById, type IdDoc } from "@shared/doc.ts";
 import { deriveKey, isPin, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
-import { downloadJson, readSealedFile, type ThemePref, type VaultData } from "../store.ts";
+import { exportBlobs, importBlobs } from "../blobs.ts";
+import { downloadJson, readSealedFile, vaultOnly, type BackupFile, type ThemePref, type VaultData } from "../store.ts";
 import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
 import type { SyncState } from "../App.tsx";
 import { BioSetup } from "./BioSetup.tsx";
@@ -44,12 +45,24 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
   onClose: () => void;
 }) {
   const toast = useToast();
-  const [pending, setPending] = useState<SealedVault | null>(null);
+  const [pending, setPending] = useState<BackupFile | null>(null);
   const [importPass, setImportPass] = useState("");
   const [pw, setPw] = useState({ current: "", next: "", repeat: "" });
   const [erase, setErase] = useState("");
   const [error, setError] = useState<{ where: string; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // the backup carries the encrypted ID files too, so it restores everything without Google Drive
+  async function exportBackup() {
+    setBusy(true);
+    try {
+      const blobs = await exportBlobs(docs.flatMap((d) => d.files));
+      downloadJson(`wallet-backup-${new Date().toISOString().slice(0, 10)}.json`, { ...sealed, blobs });
+    } catch (err) {
+      setError({ where: "import", text: `Could not export: ${(err as Error).message}` });
+    }
+    setBusy(false);
+  }
 
   async function pickBackup(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -68,7 +81,8 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
     if (!pending) return;
     setBusy(true);
     try {
-      const { data } = await unlock<VaultData>(pending, importPass);
+      const { data } = await unlock<VaultData>(vaultOnly(pending), importPass);
+      if (pending.blobs) await importBlobs(pending.blobs);
       // same card or document in both: the more recently edited copy wins
       const theirDocs = data.docs ?? [];
       await onReplace(mergeById(cards, data.cards), mergeById(docs, theirDocs));
@@ -168,7 +182,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
           <h3>Backup</h3>
           <p className="fine">The backup file is the encrypted vault. It opens only with the PIN it was made with. Use it to move cards between devices or to keep a copy somewhere safe.</p>
           <div className="actions-row">
-            <button className="btn" onClick={() => downloadJson(`wallet-backup-${new Date().toISOString().slice(0, 10)}.json`, sealed)}>
+            <button className="btn" disabled={busy} onClick={() => void exportBackup()}>
               <Icon name="download" /> Export backup
             </button>
             <label className="btn">

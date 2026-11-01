@@ -1,12 +1,14 @@
 /**
- * Files attached to ID documents. Photos are shrunk to a sharp-but-small JPEG; PDFs are kept as they are, up to a
- * limit, because everything lives inside the encrypted vault in browser storage (a few MB in all).
+ * Files attached to ID documents. Photos are shrunk to a sharp-but-small JPEG; PDFs are kept as they are, up to
+ * 10 MB. New files arrive as data URLs and are moved into the encrypted blob store (blobs.ts) when the ID is saved.
  */
+import { useEffect, useState } from "react";
 import type { DocFile } from "@shared/doc.ts";
+import { fileBlob } from "./blobs.ts";
 import { newId } from "./store.ts";
 
 const PHOTO_MAX = 1600;
-export const PDF_MAX_BYTES = 2.5 * 1024 * 1024;
+export const PDF_MAX_BYTES = 10 * 1024 * 1024;
 
 const readAsDataUrl = (blob: Blob) =>
   new Promise<string>((resolve, reject) => {
@@ -30,23 +32,41 @@ export async function photoFile(file: File): Promise<DocFile> {
 
 export async function pdfFile(file: File): Promise<DocFile> {
   if (file.type !== "application/pdf" && !/\.pdf$/i.test(file.name)) throw new Error("That is not a PDF.");
-  if (file.size > PDF_MAX_BYTES) throw new Error(`That PDF is ${(file.size / 1048576).toFixed(1)} MB; the limit is 2.5 MB. Try a photo instead.`);
+  if (file.size > PDF_MAX_BYTES) throw new Error(`That PDF is ${(file.size / 1048576).toFixed(1)} MB; the limit is 10 MB.`);
   return { id: newId(), name: file.name, type: "application/pdf", data: await readAsDataUrl(file), size: file.size };
 }
 
-export function toBlob(f: DocFile): Blob {
-  const [, b64 = ""] = f.data.split(",");
-  return new Blob([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], { type: f.type });
+export const toFile = async (f: DocFile) => new File([await fileBlob(f)], f.name, { type: f.type });
+
+/** Opens a file in a new tab (PDF viewer or image). The tab is opened first, so Safari does not block it. */
+export async function openFile(f: DocFile): Promise<void> {
+  const tab = window.open("", "_blank");
+  try {
+    const url = URL.createObjectURL(await fileBlob(f));
+    if (tab) tab.location.href = url;
+    else Object.assign(document.createElement("a"), { href: url, target: "_blank", rel: "noopener" }).click();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
 }
 
-export const toFile = (f: DocFile) => new File([toBlob(f)], f.name, { type: f.type });
-
-/** Opens a file in a new tab (PDF viewer or image) from a short-lived blob URL. */
-export function openFile(f: DocFile): void {
-  const url = URL.createObjectURL(toBlob(f));
-  const a = Object.assign(document.createElement("a"), { href: url, target: "_blank", rel: "noopener" });
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+/** An object URL for a stored file (or its inline data), revoked when the component goes away. */
+export function useFileUrl(f: DocFile | undefined): { url: string | null; error: string | null } {
+  const [state, setState] = useState<{ url: string | null; error: string | null }>({ url: f?.data ?? null, error: null });
+  useEffect(() => {
+    if (!f) return setState({ url: null, error: null });
+    if (f.data) return setState({ url: f.data, error: null });
+    let alive = true;
+    let url: string | null = null;
+    fileBlob(f).then(
+      (b) => { url = URL.createObjectURL(b); if (alive) setState({ url, error: null }); },
+      (err: Error) => alive && setState({ url: null, error: err.message }),
+    );
+    return () => { alive = false; if (url) URL.revokeObjectURL(url); };
+  }, [f?.id, f?.data, f?.key]);
+  return state;
 }
 
 export const sizeLabel = (bytes: number) => (bytes < 1048576 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1048576).toFixed(1)} MB`);

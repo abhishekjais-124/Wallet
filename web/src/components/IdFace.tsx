@@ -1,5 +1,6 @@
 import React from "react";
 import { DOC_LABEL, DOC_SUBTITLE, formatDocNumber, maskDocNumber, type IdDoc } from "@shared/doc.ts";
+import { useFileUrl } from "../files.ts";
 import { Icon } from "../ui.tsx";
 
 export type FaceDoc = Pick<IdDoc, "type" | "name" | "number" | "dob" | "validTill" | "files">;
@@ -48,12 +49,17 @@ export const IdFace = React.memo(function IdFace({ doc, reveal = false, onClick,
               {doc.type === "dl" && doc.validTill && <span><small>Valid till</small>{doc.validTill}</span>}
             </span>
           </div>
-          {photo && <span className="id-thumb" aria-hidden="true"><img src={photo.data} alt="" draggable={false} /></span>}
+          {photo && <Thumb file={photo} />}
         </div>
       </div>
     </div>
   );
 });
+
+function Thumb({ file }: { file: IdDoc["files"][number] }) {
+  const { url } = useFileUrl(file);
+  return <span className="id-thumb" aria-hidden="true">{url && <img src={url} alt="" draggable={false} />}</span>;
+}
 
 /** Small marks drawn for this app: a sunburst for Aadhaar, a PAN monogram, a steering wheel for the licence. */
 export function DocMark({ type, className = "id-mark" }: { type: IdDoc["type"]; className?: string }) {

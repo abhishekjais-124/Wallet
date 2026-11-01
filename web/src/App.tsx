@@ -5,6 +5,7 @@ import { isPin, open as openVault, seal, type SealedVault, type VaultKey } from 
 import { available as bioAvailable, bioLabel, enrolled as bioEnrolled, forget as bioForget } from "./bio.ts";
 import { bioIcon, BioSetup } from "./components/BioSetup.tsx";
 import { account, CLIENT_ID, signIn, signOut, takeRedirect, token } from "./google.ts";
+import { flushBlobs } from "./blobs.ts";
 import { clearMeta, meta, pull, push, setMeta, whoAmI } from "./sync.ts";
 import { CardFace } from "./components/CardFace.tsx";
 import { Detail } from "./components/Detail.tsx";
@@ -134,6 +135,7 @@ export function App() {
         await adopt(remote);
       }
       setSync({ status: "ok", email: account(), at: Date.now() });
+      void flushBlobs(); // ID files added or removed while offline or signed out
     } catch (err) {
       setSync({ status: "error", email: account(), message: (err as Error).message });
     }

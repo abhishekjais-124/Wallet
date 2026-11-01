@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { deriveKey, seal, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
 import { bioErrorMessage, bioLabel, BioStaleError, enrolled as bioEnrolled, forget as bioForget, unlockWithBio } from "../bio.ts";
-import { readSealedFile, saveSealed, type VaultData } from "../store.ts";
+import { importBlobs } from "../blobs.ts";
+import { readSealedFile, saveSealed, vaultOnly, type VaultData } from "../store.ts";
 import { Icon } from "../ui.tsx";
 import { CLIENT_ID, signIn } from "../google.ts";
 import { bioIcon } from "./BioSetup.tsx";
@@ -94,7 +95,9 @@ export function Lock({ sealed, onOpen, onCreated }: {
     e.target.value = "";
     if (!file) return;
     try {
-      const s = await readSealedFile(file);
+      const backup = await readSealedFile(file);
+      if (backup.blobs) await importBlobs(backup.blobs);
+      const s = vaultOnly(backup);
       saveSealed(s);
       onCreated(s);
       setError(null);

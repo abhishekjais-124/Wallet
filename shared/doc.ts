@@ -7,8 +7,10 @@ export interface DocFile {
   name: string;
   /** MIME type: image/jpeg for photos, application/pdf for PDFs */
   type: string;
-  /** data URL; encrypted with the rest of the vault */
-  data: string;
+  /** data URL, only until the file is moved to the blob store (and in records made before it existed) */
+  data?: string;
+  /** the file's own AES-GCM key (base64) once it lives in the blob store: IndexedDB here, Google Drive app folder */
+  key?: string;
   size: number;
 }
 

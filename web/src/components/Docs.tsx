@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   DOC_LABEL, DOC_TYPES, formatDocNumber, maskDocNumber, normalizeDate, normalizeDocNumber, validDocNumber,
   type DocFile, type DocType, type IdDoc,
 } from "@shared/doc.ts";
-import { openFile, pdfFile, photoFile, sizeLabel, toFile } from "../files.ts";
+import { forgetFile, storeFile } from "../blobs.ts";
+import { openFile, pdfFile, photoFile, sizeLabel, toFile, useFileUrl } from "../files.ts";
 import { newId } from "../store.ts";
 import { Icon, Segmented, Sheet, useAutoHide, useCopy, useToast } from "../ui.tsx";
 import { IdFace } from "./IdFace.tsx";
@@ -19,10 +20,22 @@ export function DocsView({ docs, save, adding, onAdded }: {
   const [editing, setEditing] = useState<IdDoc | "new" | null>(null);
   useEffect(() => { if (adding) { setEditing("new"); onAdded(); } }, [adding, onAdded]);
 
+  // files live in the blob store (device + Drive), not in the vault: move older inline files there once
+  useEffect(() => {
+    if (!docs.some((d) => d.files.some((f) => f.data))) return;
+    void Promise.all(docs.map(async (d) => ({ ...d, files: await Promise.all(d.files.map(storeFile)) }))).then(save);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const order: Record<DocType, number> = { aadhaar: 0, pan: 1, dl: 2 };
   const shown = [...docs].sort((a, b) => order[a.type] - order[b.type] || a.name.localeCompare(b.name));
   const open = docs.find((d) => d.id === openId) ?? null;
-  const upsert = (doc: IdDoc) => save(docs.some((d) => d.id === doc.id) ? docs.map((d) => (d.id === doc.id ? doc : d)) : [...docs, doc]);
+  const upsert = async (draft: IdDoc) => {
+    const doc = { ...draft, files: await Promise.all(draft.files.map(storeFile)) };
+    const before = docs.find((d) => d.id === doc.id)?.files ?? [];
+    await save(docs.some((d) => d.id === doc.id) ? docs.map((d) => (d.id === doc.id ? doc : d)) : [...docs, doc]);
+    for (const f of before) if (!doc.files.some((x) => x.id === f.id)) void forgetFile(f.id);
+  };
 
   return (
     <>
@@ -45,7 +58,7 @@ export function DocsView({ docs, save, adding, onAdded }: {
 
       {open && (
         <DocDetail doc={open} onClose={() => setOpenId(null)} onEdit={() => { setEditing(open); setOpenId(null); }}
-          onDelete={async () => { await save(docs.filter((d) => d.id !== open.id)); setOpenId(null); }} />
+          onDelete={async () => { await save(docs.filter((d) => d.id !== open.id)); open.files.forEach((f) => void forgetFile(f.id)); setOpenId(null); }} />
       )}
       {editing && (
         <DocEditor doc={editing === "new" ? null : editing} onClose={() => setEditing(null)}
@@ -100,8 +113,9 @@ function DocDetail({ doc, onEdit, onDelete, onClose }: { doc: IdDoc; onEdit: () 
             <h3>Files</h3>
             <div className="file-grid">
               {doc.files.map((f) => (
-                <button key={f.id} className="file-tile" onClick={() => (f.type.startsWith("image/") ? setViewing(f) : openFile(f))} title={f.name}>
-                  {f.type.startsWith("image/") ? <img src={f.data} alt={f.name} /> : <span className="file-pdf"><Icon name="file" size={26} />PDF</span>}
+                <button key={f.id} className="file-tile" title={f.name}
+                  onClick={() => (f.type.startsWith("image/") ? setViewing(f) : void openFile(f).catch((err: Error) => toast(err.message)))}>
+                  <FileThumb file={f} />
                   <small>{sizeLabel(f.size)}</small>
                 </button>
               ))}
@@ -111,7 +125,7 @@ function DocDetail({ doc, onEdit, onDelete, onClose }: { doc: IdDoc; onEdit: () 
       </div>
       {viewing && (
         <div className="lightbox" onClick={() => setViewing(null)} role="dialog" aria-label={viewing.name}>
-          <img src={viewing.data} alt={viewing.name} />
+          <LightboxImage file={viewing} />
           <button className="btn icon lightbox-close" aria-label="Close"><Icon name="x" /></button>
         </div>
       )}
@@ -248,7 +262,7 @@ function DocEditor({ doc, onSave, onClose }: { doc: IdDoc | null; onSave: (doc: 
               <div className="file-grid">
                 {f.files.map((file) => (
                   <div key={file.id} className="file-tile">
-                    {file.type.startsWith("image/") ? <img src={file.data} alt={file.name} /> : <span className="file-pdf"><Icon name="file" size={26} />PDF</span>}
+                    <FileThumb file={file} />
                     <small>{sizeLabel(file.size)}</small>
                     <button type="button" className="file-remove" aria-label={`Remove ${file.name}`} onClick={() => set("files", f.files.filter((x) => x.id !== file.id))}><Icon name="x" size={14} /></button>
                   </div>
@@ -256,7 +270,7 @@ function DocEditor({ doc, onSave, onClose }: { doc: IdDoc | null; onSave: (doc: 
               </div>
             )}
             {errors.files && <em className="field-error">{errors.files}</em>}
-            <p className="fine">Front and back photos, or the PDF you downloaded. Photos are resized; PDFs up to 2.5 MB. Everything is encrypted with your PIN.</p>
+            <p className="fine">Front and back photos, or the PDF you downloaded (up to 10 MB). Files are encrypted on this device and kept in your Google Drive when you are signed in.</p>
           </div>
           {errors.form && <p className="form-error" role="alert">{errors.form}</p>}
           <div className="sheet-actions">
@@ -274,7 +288,6 @@ function DocShare({ doc, onClose }: { doc: IdDoc; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const copy = useCopy();
   const toast = useToast();
-  const files = useRef(doc.files);
   const text = [
     `${DOC_LABEL[doc.type]} · ${doc.name}`,
     `Number: ${full ? formatDocNumber(doc.type, doc.number) : maskDocNumber(doc.type, doc.number)}`,
@@ -284,20 +297,20 @@ function DocShare({ doc, onClose }: { doc: IdDoc; onClose: () => void }) {
 
   async function shareFiles() {
     setBusy(true);
-    const list = files.current.map(toFile);
     try {
+      const list = await Promise.all(doc.files.map(toFile));
       if (navigator.canShare?.({ files: list })) {
         await navigator.share({ files: list, title: `${DOC_LABEL[doc.type]} · ${doc.name}` });
       } else {
-        for (const f of files.current) {
-          const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(toFile(f)), download: f.name });
+        for (const f of list) {
+          const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(f), download: f.name });
           a.click();
           setTimeout(() => URL.revokeObjectURL(a.href), 1000);
         }
-        toast(files.current.length === 1 ? "File saved" : "Files saved");
+        toast(list.length === 1 ? "File saved" : "Files saved");
       }
     } catch (err) {
-      if ((err as Error).name !== "AbortError") toast("Could not share the files");
+      if ((err as Error).name !== "AbortError") toast((err as Error).message || "Could not share the files");
     }
     setBusy(false);
   }
@@ -334,4 +347,16 @@ function DocShare({ doc, onClose }: { doc: IdDoc; onClose: () => void }) {
       </div>
     </Sheet>
   );
+}
+
+function FileThumb({ file }: { file: DocFile }) {
+  const { url, error } = useFileUrl(file.type.startsWith("image/") ? file : undefined);
+  if (!file.type.startsWith("image/")) return <span className="file-pdf"><Icon name="file" size={26} />PDF</span>;
+  if (url) return <img src={url} alt={file.name} />;
+  return <span className="file-pdf" title={error ?? undefined}><Icon name={error ? "x" : "image"} size={22} />{error ? "Not here" : ""}</span>;
+}
+
+function LightboxImage({ file }: { file: DocFile }) {
+  const { url, error } = useFileUrl(file);
+  return url ? <img src={url} alt={file.name} /> : <p style={{ color: "#fff" }}>{error ?? "Loading…"}</p>;
 }

@@ -31,16 +31,21 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 
 * IDs tab: Aadhaar, PAN and driving licence, each drawn as its own card (our own designs, not the government
   artwork), with name, number (masked to the last four by default), date of birth and, for a licence, valid till.
-  Attach front/back photos (resized to 1600 px JPEG) and/or the PDF (up to 2.5 MB). Share the files, or the details
-  as text with the number masked unless switched on. IDs live in the same encrypted vault, so they sync, back up and
-  import with the cards; browser storage holds a few MB in all, so prefer photos over large PDFs.
+  Attach front/back photos (resized to 1600 px JPEG) and/or the PDF (up to 10 MB). Share the files, or the details
+  as text with the number masked unless switched on.
+* Where ID files live (`web/src/blobs.ts`): not in the vault. Each file is encrypted with its own random AES-GCM
+  key, which is stored in the file's record inside the encrypted vault. The encrypted bytes are cached in this
+  device's IndexedDB and uploaded to the Google Drive app folder as `blob-<id>`; another device (or this one after
+  Safari clears storage) fetches a file from Drive the first time it is shown. Changes made while signed out or
+  offline wait in a queue and go up at the next sync. The vault itself stays small (cards, ID details, file keys).
+  Backups include the encrypted files, so a backup restores everything without Drive.
 
 ## Security model
 
 | What | How |
 | --- | --- |
 | Encryption | The 9-digit PIN (older vaults: a passphrase) is stretched with PBKDF2-SHA256 (600,000 iterations, random 16-byte salt) into a non-extractable AES-256-GCM key (`shared/vault.ts`). The whole card list is sealed as one blob with a fresh IV on every save. |
-| Storage | Only the sealed blob is written to `localStorage`. Plaintext lives in memory while unlocked. Nothing is sent to the server. |
+| Storage | The sealed vault is written to `localStorage`; encrypted ID files to IndexedDB and, when signed in, the Google Drive app folder. Plaintext lives in memory while unlocked. Nothing is sent to the app's server. |
 | PIN | Nine digits on a phone-style number pad. Never stored. There is no recovery: a forgotten PIN means the cards cannot be decrypted. A 9-digit PIN is far weaker than a long passphrase against someone who steals the vault or a backup file and tests PINs offline, so keep backup files private. |
 | Face ID / Touch ID | Optional, per device (`web/src/bio.ts`). A passkey on the device's own authenticator is created with the WebAuthn PRF extension; the secret it returns after a successful biometric check is run through HKDF and wraps the PIN with AES-GCM. Only the wrapped PIN is stored, on that device. Unlocking still derives the vault key from the PIN. Changing the PIN, erasing the wallet, or a wrap that no longer opens turns it off. Needs iOS 18 / Safari 18 / a recent Chrome; otherwise the section says so and the PIN pad is the only way in. |
 | Masking | Number and CVV are masked by default. Revealing them hides them again after 20 seconds. |

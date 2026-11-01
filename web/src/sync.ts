@@ -91,3 +91,31 @@ export async function push(sealed: SealedVault): Promise<void> {
   }
   setMeta({ syncedAt: sealed.savedAt ?? 0, dirty: false });
 }
+
+// ---- attachment blobs: one encrypted file per attachment, named blob-<id>, in the same app folder ----
+
+async function blobFileId(id: string): Promise<string | null> {
+  const q = encodeURIComponent(`name='blob-${id}'`);
+  const res = await call(`/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id)`);
+  return ((await res.json()) as { files?: { id: string }[] }).files?.[0]?.id ?? null;
+}
+
+export async function pushBlob(id: string, bytes: Uint8Array<ArrayBuffer>): Promise<void> {
+  if (await blobFileId(id)) return; // blobs never change: same id, same bytes
+  const form = new FormData();
+  form.append("metadata", new Blob([JSON.stringify({ name: `blob-${id}`, parents: ["appDataFolder"] })], { type: "application/json" }));
+  form.append("file", new Blob([bytes], { type: "application/octet-stream" }));
+  await call("/upload/drive/v3/files?uploadType=multipart&fields=id", { method: "POST", body: form });
+}
+
+export async function pullBlob(id: string): Promise<Uint8Array<ArrayBuffer> | null> {
+  const fid = await blobFileId(id);
+  if (!fid) return null;
+  const res = await call(`/drive/v3/files/${fid}?alt=media`);
+  return new Uint8Array(await res.arrayBuffer());
+}
+
+export async function deleteBlob(id: string): Promise<void> {
+  const fid = await blobFileId(id);
+  if (fid) await call(`/drive/v3/files/${fid}`, { method: "DELETE" });
+}

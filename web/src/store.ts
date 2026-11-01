@@ -62,7 +62,13 @@ export function downloadJson(name: string, data: unknown): void {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function readSealedFile(file: File): Promise<SealedVault> {
+/** A backup file: the sealed vault, plus the encrypted ID files (each still needs its key from inside the vault). */
+export type BackupFile = SealedVault & { blobs?: Record<string, string> };
+
+/** The vault part of a backup, without the bulky files, for storing as the device's vault. */
+export const vaultOnly = ({ blobs: _files, ...vault }: BackupFile): SealedVault => vault;
+
+export async function readSealedFile(file: File): Promise<BackupFile> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(await file.text());
