@@ -85,7 +85,9 @@ export function App() {
       for (const c of theirs) if ((byId.get(c.id)?.updatedAt ?? -1) < c.updatedAt) byId.set(c.id, c);
       await persist([...byId.values()], vk);
     } catch {
-      setSync({ status: "error", email: account(), message: "The wallet in Google Drive uses a different PIN, so it was not merged." });
+      // still open this device's own cards; only the merge is skipped
+      setSession({ vk, cards });
+      setSync({ status: "error", email: account(), message: "The wallet in Google Drive uses a different PIN, so it was not merged. Set the same PIN on both devices, then Sync now." });
     }
   }, [persist]);
 
