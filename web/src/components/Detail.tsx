@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { expiryState, formatNumber, last4, maskNumber, NETWORK_LABEL, type Card } from "@shared/card.ts";
-import { Icon, Sheet, useAutoHide, useCopy } from "../ui.tsx";
+import { Icon, Sheet, useAutoHide, useCopy, useToast } from "../ui.tsx";
 import { CardFace } from "./CardFace.tsx";
 import { ShareCard } from "./Share.tsx";
 
@@ -12,6 +12,7 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
   onClose: () => void;
 }) {
   const copy = useCopy();
+  const toast = useToast();
   const [showNumber, setShowNumber] = useAutoHide();
   const [showCvv, setShowCvv] = useAutoHide();
   const [flipped, setFlipped] = useState(false);
@@ -37,19 +38,15 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
         </div>
 
         <div className="action-bar" role="toolbar" aria-label="Card actions">
-          <button className={`action${card.favorite ? " on" : ""}`} onClick={onToggleFavorite} aria-pressed={card.favorite}>
-            <span className="action-icon"><Icon name="star" size={20} /></span>
-            Favourite
+          <button className={`action is-fav${card.favorite ? " on" : ""}`} onClick={onToggleFavorite} aria-pressed={card.favorite}
+            aria-label={card.favorite ? "Remove from favourites" : "Add to favourites"} title={card.favorite ? "Favourite" : "Add to favourites"}>
+            <Icon name="star" size={21} />
           </button>
-          <button className="action" onClick={() => setSharing(true)}>
-            <span className="action-icon"><Icon name="share" size={20} /></span>Share
-          </button>
-          <button className="action" onClick={onEdit}>
-            <span className="action-icon"><Icon name="edit" size={20} /></span>Edit
-          </button>
-          <button className={`action danger${confirmDelete ? " armed" : ""}`} onClick={() => (confirmDelete ? onDelete() : setConfirmDelete(true))}
->
-            <span className="action-icon"><Icon name="trash" size={20} /></span>{confirmDelete ? "Confirm?" : "Delete"}
+          <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={21} /></button>
+          <button className="action is-edit" onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={21} /></button>
+          <button className={`action is-danger${confirmDelete ? " armed" : ""}`} aria-label={confirmDelete ? "Tap again to delete" : "Delete"} title="Delete"
+            onClick={() => { if (confirmDelete) onDelete(); else { setConfirmDelete(true); toast("Tap again to delete"); } }}>
+            <Icon name={confirmDelete ? "check" : "trash"} size={21} />
           </button>
         </div>
 
