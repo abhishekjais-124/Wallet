@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+
+const HALF_TURN_MS = 160;
 import { cvvLength, formatNumber, inkFor, maskNumber, type Card, type Network } from "@shared/card.ts";
 import { Art, artFor } from "./Art.tsx";
 import { BankMark } from "./BankMark.tsx";
@@ -7,7 +9,8 @@ export type FaceCard = Pick<Card, "bank" | "nickname" | "kind" | "network" | "nu
 
 /**
  * A realistic card: front with chip, number and network mark; back with stripe and CVV panel. Sized by its container.
- * Only `flippable` faces build the back and the 3D layers, so a long list stays a stack of flat, cheap cards.
+ * Only `flippable` faces build the back. The flip is flat on purpose: the card squashes to an edge, swaps side and
+ * opens again. Real 3D (rotateY + preserve-3d) is drawn above the sheet's header and rows by iOS Safari.
  */
 export const CardFace = React.memo(function CardFace({ card, flippable = false, flipped = false, reveal = false, revealCvv = false, onClick, label }: {
   card: FaceCard;
@@ -21,11 +24,24 @@ export const CardFace = React.memo(function CardFace({ card, flippable = false, 
   const style = { "--c1": card.colors[0], "--c2": card.colors[1] } as React.CSSProperties;
   const number = card.number ? (reveal ? formatNumber(card.number, card.network) : maskNumber(card.number, card.network)) : "•••• •••• •••• ••••";
   const Tag = onClick ? "button" : "div";
+  // the side on show lags `flipped` by half the turn, so the swap happens while the card is edge-on
+  const [side, setSide] = useState(flipped);
+  const [turning, setTurning] = useState(false);
+  useEffect(() => {
+    if (flipped === side) return;
+    setTurning(true);
+    const t = setTimeout(() => {
+      setSide(flipped);
+      setTurning(false);
+    }, HALF_TURN_MS);
+    return () => clearTimeout(t);
+  }, [flipped, side]);
+  const back = flippable && side;
   return (
-    <Tag className={`cardface${flippable ? " flippable" : ""}${flipped ? " flipped" : ""}`} style={style} data-ink={inkFor(card.colors)} onClick={onClick}
+    <Tag className={`cardface${flippable ? " flippable" : ""}${back ? " flipped" : ""}${turning ? " turning" : ""}`} style={style} data-ink={inkFor(card.colors)} onClick={onClick}
       aria-label={label} type={onClick ? "button" : undefined}>
       <div className="cf-inner">
-        <div className={`cf-side cf-front${card.image ? " has-photo" : ""}`}>
+        <div className={`cf-side cf-front${card.image ? " has-photo" : ""}`} hidden={back}>
           {card.image ? <img className="cf-photo" src={card.image} alt="" draggable={false} /> : <Art style={artFor(card.nickname, card.bank, card.art)} name={card.nickname || card.bank} />}
           <div className="cf-row">
             <span className="cf-brand">
@@ -49,7 +65,7 @@ export const CardFace = React.memo(function CardFace({ card, flippable = false, 
             <NetworkMark network={card.network} />
           </div>
         </div>
-        {flippable && <div className="cf-side cf-back" aria-hidden={!flipped}>
+        {back && <div className="cf-side cf-back">
           <div className="cf-stripe" />
           <div className="cf-sign">
             <span className="cf-sign-strip" />
