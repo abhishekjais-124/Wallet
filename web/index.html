@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#08090d" />
+    <meta name="description" content="Wallet: your cards, encrypted on your device." />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Wallet" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <title>Wallet</title>
+    <style>
+      /* first paint before the JS bundle arrives; React replaces #root's content on mount */
+      html, body { background: #08090d; margin: 0; }
+      @media (prefers-color-scheme: light) { html, body { background: #f5f6fa; } .boot { color: #12141b !important; } }
+      .boot { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; gap: 10px; color: #f2f3f8; font: 800 26px/1 system-ui, -apple-system, sans-serif; letter-spacing: -0.03em; }
+      .boot-dot { width: 12px; height: 12px; border-radius: 50%; background: linear-gradient(135deg, #6f86ff, #9a73ff); animation: boot-breathe 1.6s ease-in-out infinite; }
+      @keyframes boot-breathe { 50% { transform: scale(1.18); } }
+      @media (prefers-reduced-motion: reduce) { .boot-dot { animation: none; } }
+    </style>
+  </head>
+  <body>
+    <div id="root"><div class="boot" role="status" aria-label="Loading Wallet"><span class="boot-dot"></span>Wallet</div></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
