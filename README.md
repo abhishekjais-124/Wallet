@@ -72,7 +72,7 @@ Screen, so install it as a PWA on iPhone and keep a recent backup.
      },
    };
    ```
-3. **Google sign-in**: in Google Cloud (the personal account), create an OAuth client of type *Web application* with
+3. **Google sign-in**: in Google Cloud (abhishekjaiswal124@gmail.com, project `wallet-513414`, already done), create an OAuth client of type *Web application* with
    authorised JavaScript origins `https://aj124.com` and `http://localhost:8788`, and authorised redirect URIs
    `https://aj124.com/Wallet/` and `http://localhost:8788/Wallet/`. Enable the Google Drive API, add the
    `.../auth/drive.appdata` scope to the consent screen and your Gmail as a test user. Put the client id in Render as

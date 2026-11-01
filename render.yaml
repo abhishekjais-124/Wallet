@@ -15,6 +15,7 @@ services:
         value: "22"
       - key: WALLET_BASE
         value: /Wallet
-      # OAuth web client id for "Sign in with Google" sync (public, not a secret); empty hides sync
+      # OAuth web client id for "Sign in with Google" sync (public, not a secret): project wallet-513414,
+      # owner abhishekjaiswal124@gmail.com, client "Wallet web"; empty hides sync
       - key: WALLET_GOOGLE_CLIENT_ID
-        sync: false
+        value: 465085654408-q9o4hvn2t0jlcko7el83kva3bccp6ijg.apps.googleusercontent.com
