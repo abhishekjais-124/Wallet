@@ -1,0 +1,17 @@
+# Render blueprint for Wallet. Served at https://aj124.com/Wallet (a Cloudflare Worker forwards /Wallet* here, path unchanged).
+# The service only ships static files: cards are encrypted and stored in the browser, so no secrets or disk are needed.
+services:
+  - type: web
+    name: wallet
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci --include=dev && WALLET_BASE=/Wallet npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: WALLET_BASE
+        value: /Wallet
