@@ -4,6 +4,7 @@ import { deriveKey, isPin, unlock, WrongPassphraseError, type SealedVault, type 
 import { downloadJson, readSealedFile, type ThemePref, type VaultData } from "../store.ts";
 import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
 import type { SyncState } from "../App.tsx";
+import { BioSetup } from "./BioSetup.tsx";
 
 // iOS shows the number pad for inputmode="numeric" with a digits-only pattern
 const pinInput = { inputMode: "numeric", pattern: "[0-9]*", maxLength: 9, autoComplete: "new-password" } as const;
@@ -15,8 +16,20 @@ export interface SyncControls extends SyncState {
   onSyncNow: () => void;
 }
 
-export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, cards, onReplace, onRekey, onErase, sync, onClose }: {
+export interface BioControls {
+  label: string;
+  available: boolean;
+  enrolled: boolean;
+  pin: string | null;
+  offer: boolean;
+  onEnrolled: () => void;
+  onForget: () => void;
+  onDismissOffer: () => void;
+}
+
+export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, cards, onReplace, onRekey, onErase, sync, bio, onClose }: {
   sync: SyncControls;
+  bio: BioControls;
   theme: ThemePref;
   onTheme: (t: ThemePref) => void;
   lockMinutes: number;
@@ -92,6 +105,25 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
           <h3>Appearance</h3>
           <Segmented label="Theme" value={theme} onChange={onTheme}
             options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
+        </section>
+
+        <section>
+          <h3>{bio.label}</h3>
+          {bio.enrolled ? (
+            <>
+              <p className="sync-line"><span className="sync-dot ok" /><span className="grow">{bio.label} unlock is on for this device.<br />
+                <small>The PIN is wrapped by this device's passkey and never leaves it. Changing the PIN turns this off.</small></span></p>
+              <div className="actions-row"><button className="btn" onClick={bio.onForget}>Turn off</button></div>
+            </>
+          ) : bio.available ? (
+            <>
+              <p className="fine">Unlock with {bio.label} instead of typing the PIN. The PIN stays the real key; it is stored on this device
+                wrapped by a passkey that only opens after {bio.label}.</p>
+              <BioSetup pin={bio.pin} sealed={sealed} onDone={() => { bio.onEnrolled(); toast(`${bio.label} unlock is on`); }} />
+            </>
+          ) : (
+            <p className="fine">Not available in this browser. It needs a device with {bio.label} and a recent browser (iOS 18, Safari 18 or Chrome).</p>
+          )}
         </section>
 
         <section>

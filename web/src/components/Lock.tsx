@@ -1,15 +1,17 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { deriveKey, seal, unlock, WrongPassphraseError, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import { bioErrorMessage, bioLabel, BioStaleError, enrolled as bioEnrolled, forget as bioForget, unlockWithBio } from "../bio.ts";
 import { readSealedFile, saveSealed, type VaultData } from "../store.ts";
 import { Icon } from "../ui.tsx";
 import { CLIENT_ID, signIn } from "../google.ts";
+import { bioIcon } from "./BioSetup.tsx";
 import { PinPad } from "./PinPad.tsx";
 import { GoogleMark } from "./Settings.tsx";
 
 /** Create a vault with a 9-digit PIN, or open the existing one. Vaults made with an older text passphrase keep a text field. */
 export function Lock({ sealed, onOpen, onCreated }: {
   sealed: SealedVault | null;
-  onOpen: (vk: VaultKey, data: VaultData) => void;
+  onOpen: (vk: VaultKey, data: VaultData, secret: string) => void;
   onCreated: (sealed: SealedVault) => void;
 }) {
   const [firstPin, setFirstPin] = useState<string | null>(null);
@@ -17,6 +19,7 @@ export function Lock({ sealed, onOpen, onCreated }: {
   const [useLetters, setUseLetters] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bio, setBio] = useState(() => !!sealed && bioEnrolled());
 
   async function open(secret: string): Promise<string | null> {
     if (!sealed) return "No wallet yet.";
@@ -24,7 +27,7 @@ export function Lock({ sealed, onOpen, onCreated }: {
     setError(null);
     try {
       const { data, vk } = await unlock<VaultData>(sealed, secret);
-      onOpen(vk, data);
+      onOpen(vk, data, secret);
       return null;
     } catch (err) {
       const msg = err instanceof WrongPassphraseError ? (useLetters ? err.message : "Wrong PIN.") : `Could not open the wallet: ${(err as Error).message}`;
@@ -33,6 +36,31 @@ export function Lock({ sealed, onOpen, onCreated }: {
       return msg;
     }
   }
+
+  async function openWithBio() {
+    setError(null);
+    let pin: string | null = null;
+    try {
+      pin = await unlockWithBio();
+    } catch (err) {
+      if (!(err instanceof BioStaleError)) {
+        setError(bioErrorMessage(err));
+        return;
+      }
+    }
+    if (pin === null || (await open(pin))) {
+      // the PIN changed since the passkey was made (another device, or a restored backup): drop the stale wrap
+      bioForget();
+      setBio(false);
+      setError(`The PIN changed since ${bioLabel()} was set up. Enter the PIN, then set it up again in Settings.`);
+    }
+  }
+
+  // like a phone: ask for the face or finger as soon as the lock screen shows (browsers that need a tap just wait for the button)
+  useEffect(() => {
+    if (bio && document.visibilityState === "visible") void openWithBio().catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function create(pin: string): Promise<string | null> {
     if (firstPin === null) {
@@ -52,7 +80,7 @@ export function Lock({ sealed, onOpen, onCreated }: {
       const s = await seal(data, vk);
       saveSealed(s);
       onCreated(s);
-      onOpen(vk, data);
+      onOpen(vk, data, pin);
       return null;
     } catch (err) {
       setBusy(false);
@@ -87,6 +115,11 @@ export function Lock({ sealed, onOpen, onCreated }: {
         <div className="lock-mark"><Icon name={creating ? "shield" : "lock"} size={26} /></div>
         <h1>{title}</h1>
         <p className="muted">{hint}</p>
+        {bio && !creating && (
+          <button type="button" className="btn primary block bio-btn" onClick={() => void openWithBio()} disabled={busy}>
+            <Icon name={bioIcon()} size={22} /> Unlock with {bioLabel()}
+          </button>
+        )}
         {creating || !useLetters ? (
           <PinPad busy={busy} onComplete={creating ? create : open} />
         ) : (

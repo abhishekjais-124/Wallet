@@ -1,6 +1,8 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { digits, expiryState, last4, NETWORK_LABEL, type Card } from "@shared/card.ts";
-import { open as openVault, seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import { isPin, open as openVault, seal, type SealedVault, type VaultKey } from "@shared/vault.ts";
+import { available as bioAvailable, bioLabel, enrolled as bioEnrolled, forget as bioForget } from "./bio.ts";
+import { bioIcon, BioSetup } from "./components/BioSetup.tsx";
 import { account, CLIENT_ID, signIn, signOut, takeRedirect, token } from "./google.ts";
 import { clearMeta, meta, pull, push, setMeta, whoAmI } from "./sync.ts";
 import { CardFace } from "./components/CardFace.tsx";
@@ -33,8 +35,13 @@ export function App() {
   const [lockMinutes, setLockMinutes] = useState(() => getPref<number>("lockMinutes", 5));
   useTheme(theme);
 
-  const lock = useCallback(() => setSession(null), []);
+  const lock = useCallback(() => { setSession(null); setKnownPin(null); }, []);
   useAutoLock(!!session, lockMinutes, lock);
+
+  const [knownPin, setKnownPin] = useState<string | null>(null);
+  const [bioOk, setBioOk] = useState(false);
+  const [bioOn, setBioOn] = useState(bioEnrolled);
+  useEffect(() => { void bioAvailable().then(setBioOk); }, []);
 
   const [sync, setSync] = useState<SyncState>({ status: "off" });
   const sessionRef = useRef(session);
@@ -142,7 +149,8 @@ export function App() {
   return (
     <ToastHost>
       {!session || !sealed ? (
-        <Lock sealed={sealed} onCreated={(s) => { setSealed(s); void syncNow(); }} onOpen={(vk, data) => {
+        <Lock sealed={sealed} onCreated={(s) => { setSealed(s); void syncNow(); }} onOpen={(vk, data, secret) => {
+          setKnownPin(isPin(secret) ? secret : null); // kept only while unlocked, so Face ID can be set up without retyping it
           const remote = pendingMerge.current;
           if (remote) void merge(remote, vk, data.cards);
           // an older vault opened with nine digits is re-sealed once, so it is marked as a PIN vault from now on
@@ -162,8 +170,18 @@ export function App() {
             sealed,
             cards: session.cards,
             onReplace: (cards) => persist(cards, session.vk),
-            onRekey: (vk) => persist(session.cards, vk),
-            onErase: () => { eraseSealed(); setSealed(null); setSession(null); },
+            onRekey: (vk) => { if (bioOn) { bioForget(); setBioOn(false); } setKnownPin(null); return persist(session.cards, vk); },
+            onErase: () => { eraseSealed(); bioForget(); setBioOn(false); setSealed(null); setSession(null); },
+            bio: {
+              label: bioLabel(),
+              available: bioOk,
+              enrolled: bioOn,
+              pin: knownPin,
+              offer: bioOk && !bioOn && !!knownPin && !getPref("bioOffered", ""),
+              onEnrolled: () => { setBioOn(true); setKnownPin(null); },
+              onForget: () => { bioForget(); setBioOn(false); },
+              onDismissOffer: () => setPref("bioOffered", "1"),
+            },
             sync: {
               ...sync,
               enabled: !!CLIENT_ID,
@@ -193,6 +211,7 @@ function WalletView({ cards, save, onLock, settings }: {
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Card | "new" | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [bioDismissed, setBioDismissed] = useState(false);
 
   const categories = useMemo(() => [...new Set(cards.map((c) => c.category))].sort(), [cards]);
   const networks = useMemo(() => [...new Set(cards.map((c) => c.network))], [cards]);
@@ -253,6 +272,17 @@ function WalletView({ cards, save, onLock, settings }: {
             <button className="btn primary" onClick={() => setEditing("new")}><Icon name="plus" /> Add card</button>
           </div>
         </section>
+
+        {settings.bio.offer && !bioDismissed && (
+          <div className="banner bio-offer">
+            <Icon name={bioIcon()} size={22} />
+            <div className="grow">
+              <strong>Unlock with {settings.bio.label} next time?</strong>
+              <BioSetup compact pin={settings.bio.pin} sealed={settings.sealed} onDone={settings.bio.onEnrolled}
+                onCancel={() => { settings.bio.onDismissOffer(); setBioDismissed(true); }} />
+            </div>
+          </div>
+        )}
 
         {!settings.sealed.pin && (
           <div className="banner">
