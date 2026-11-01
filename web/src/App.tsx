@@ -37,7 +37,11 @@ export function App() {
   return (
     <ToastHost>
       {!session || !sealed ? (
-        <Lock sealed={sealed} onCreated={setSealed} onOpen={(vk, data) => setSession({ vk, cards: data.cards })} />
+        <Lock sealed={sealed} onCreated={setSealed} onOpen={(vk, data) => {
+          // an older vault opened with nine digits is re-sealed once, so it is marked as a PIN vault from now on
+          if (vk.pin && sealed && !sealed.pin) void persist(data.cards, vk);
+          else setSession({ vk, cards: data.cards });
+        }} />
       ) : (
         <WalletView
           cards={session.cards}

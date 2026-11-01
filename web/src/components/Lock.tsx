@@ -11,6 +11,8 @@ export function Lock({ sealed, onOpen, onCreated }: {
   onCreated: (sealed: SealedVault) => void;
 }) {
   const [firstPin, setFirstPin] = useState<string | null>(null);
+  // the number pad is the default for every vault; a vault made with a letters passphrase can switch to a text field
+  const [useLetters, setUseLetters] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,7 +25,7 @@ export function Lock({ sealed, onOpen, onCreated }: {
       onOpen(vk, data);
       return null;
     } catch (err) {
-      const msg = err instanceof WrongPassphraseError ? (sealed.pin ? "Wrong PIN." : err.message) : `Could not open the wallet: ${(err as Error).message}`;
+      const msg = err instanceof WrongPassphraseError ? (useLetters ? err.message : "Wrong PIN.") : `Could not open the wallet: ${(err as Error).message}`;
       setError(msg);
       setBusy(false);
       return msg;
@@ -75,7 +77,7 @@ export function Lock({ sealed, onOpen, onCreated }: {
   const title = creating ? (firstPin === null ? "Create a 9-digit PIN" : "Repeat your PIN") : "Wallet is locked";
   const hint = creating
     ? firstPin === null ? "Cards are encrypted with it on this device and never leave it." : "Enter the same nine digits again."
-    : sealed.pin ? "Enter your 9-digit PIN." : "Enter your passphrase, then switch to a PIN in Settings.";
+    : useLetters ? "Enter your passphrase, then switch to a PIN in Settings." : "Enter your 9-digit PIN.";
 
   return (
     <main className="lock">
@@ -83,10 +85,15 @@ export function Lock({ sealed, onOpen, onCreated }: {
         <div className="lock-mark"><Icon name={creating ? "shield" : "lock"} size={26} /></div>
         <h1>{title}</h1>
         <p className="muted">{hint}</p>
-        {creating || sealed.pin ? (
+        {creating || !useLetters ? (
           <PinPad busy={busy} onComplete={creating ? create : open} />
         ) : (
           <LegacyForm busy={busy} onSubmit={open} />
+        )}
+        {!creating && !sealed.pin && (
+          <button type="button" className="btn ghost sm" onClick={() => { setUseLetters(!useLetters); setError(null); }}>
+            {useLetters ? "Use the number pad" : "My passphrase has letters"}
+          </button>
         )}
         {error && <p className="form-error" role="alert">{error}</p>}
         {busy && <p className="fine"><span className="spinner dark" aria-hidden="true" /> {creating ? "Creating…" : "Unlocking…"}</p>}
