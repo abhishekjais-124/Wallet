@@ -285,7 +285,7 @@ function WalletView({ cards, save, onLock, settings }: {
 
         {cards.length === 0 ? (
           <div className="empty">
-            <div className="empty-card"><CardFace card={{ bank: "Your first card", holder: "", kind: "credit", network: "visa", number: "", expiry: "", cvv: "", colors: ["#6f86ff", "#9a73ff"] }} /></div>
+            <div className="empty-card"><CardFace card={{ bank: "Your first card", nickname: "Wallet", kind: "credit", network: "visa", number: "", expiry: "", cvv: "", colors: ["#6f86ff", "#9a73ff"] }} /></div>
             <h2>No cards yet</h2>
             <p className="muted">Add a card and snap a photo of it to keep its colours. Everything stays encrypted on this device.</p>
             <button className="btn primary" onClick={() => setEditing("new")}><Icon name="plus" /> Add your first card</button>

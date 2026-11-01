@@ -1,7 +1,7 @@
 import React from "react";
 import { cvvLength, formatNumber, inkFor, maskNumber, type Card, type Network } from "@shared/card.ts";
 
-export type FaceCard = Pick<Card, "bank" | "holder" | "kind" | "network" | "number" | "expiry" | "cvv" | "colors">;
+export type FaceCard = Pick<Card, "bank" | "nickname" | "kind" | "network" | "number" | "expiry" | "cvv" | "colors">;
 
 /**
  * A realistic card: front with chip, number and network mark; back with stripe and CVV panel. Sized by its container.
@@ -34,10 +34,8 @@ export const CardFace = React.memo(function CardFace({ card, flippable = false, 
           </div>
           <div className="cf-number">{number}</div>
           <div className="cf-row cf-foot">
-            <div className="cf-field cf-holder">
-              <small>Card holder</small>
-              <span>{card.holder || "YOUR NAME"}</span>
-            </div>
+            {/* the holder is the same on every card, so the face shows the card's own name instead */}
+            <div className="cf-product">{card.nickname}</div>
             <div className="cf-field">
               <small>Valid thru</small>
               <span>{card.expiry || "MM/YY"}</span>
