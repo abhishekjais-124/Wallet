@@ -217,7 +217,7 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 .cf-row { display: flex; align-items: center; justify-content: space-between; gap: 3cqw; }
 .cf-bank { font-weight: 720; font-size: 5.1cqw; letter-spacing: -0.015em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 1px rgba(0, 0, 0, 0.12); }
 .cf-bank.small { font-size: 4cqw; opacity: 0.8; }
-.cf-kind { font-size: 3.2cqw; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-2); }
+.cf-kind { flex: none; max-width: 48%; font-size: 3.2cqw; font-weight: 700; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cf-chiprow { justify-content: flex-start; gap: 4cqw; }
 .cf-chip { width: 12.5cqw; height: auto; border-radius: 1.8cqw; background: linear-gradient(135deg, #f6e1a2, #d2a94e 50%, #f1d68c); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2) inset, 0 1px 1px rgba(0, 0, 0, 0.2); }
 .cf-nfc { width: 6.5cqw; height: 6.5cqw; color: var(--ink-2); }

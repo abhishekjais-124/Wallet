@@ -48,7 +48,8 @@ export const CardFace = React.memo(function CardFace({ card, flippable = false, 
               {card.bank && <BankMark bank={card.bank} />}
               <span className="cf-bank">{card.bank || "Your bank"}</span>
             </span>
-            <span className="cf-kind">{card.kind}</span>
+            {/* debit cards say so; a credit card wears its own name there, as printed on the real one */}
+            <span className="cf-kind">{card.kind === "debit" ? "Debit" : card.nickname || "Credit"}</span>
           </div>
           <div className="cf-row cf-chiprow">
             <Chip />
