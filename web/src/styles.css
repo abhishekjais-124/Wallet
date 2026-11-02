@@ -539,7 +539,7 @@ body:has(.wallet) { overflow: hidden; }
   background: var(--surface-2); color: var(--text); -webkit-tap-highlight-color: transparent; transition: transform var(--ease), background var(--ease);
 }
 .round-btn:active { transform: scale(0.92); }
-.round-btn:focus-visible, .pill-btn:focus-visible, .search-fab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.round-btn:focus-visible, .pill-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pill-btn {
   flex: none; min-height: 36px; padding: 0 16px; border-radius: 999px; border: 0; cursor: pointer;
   background: var(--surface-2); color: var(--text); font: inherit; font-size: 15px; font-weight: 650; -webkit-tap-highlight-color: transparent;
@@ -574,7 +574,11 @@ body:has(.wallet) { overflow: hidden; }
 /* spotlight.ts moves every tile each frame from the scroll position: no transitions here, or they would lag the finger */
 .stack > li { position: relative; height: var(--strip); animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
 /* scroll-snap follows transforms, so the li never moves: its card does, with `translate` (separate from the press transform) */
-.stack > li > * { position: relative; translate: 0 var(--shift, 0px); scale: calc(1 - 0.035 * var(--fold, 0)); transform-origin: 50% 0; will-change: transform; }
+.stack > li > * {
+  position: relative; translate: 0 var(--shift, 0px); scale: calc(1 - 0.035 * var(--fold, 0)); transform-origin: 50% 0; will-change: transform;
+  /* a tile that is not open shows only its strip even with nothing on top of it (the last one); the clip starts above the box so the shadow stays */
+  clip-path: inset(-40px 0 calc((100% - var(--strip)) * (1 - var(--open, 1))) 0 round var(--card-radius));
+}
 /* a strip that has folded away sits further back: a touch smaller and darker, like the passes behind in Apple Wallet */
 .stack > li > *::after {
   content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: var(--card-radius);
@@ -591,14 +595,7 @@ body:has(.wallet) { overflow: hidden; }
 .stack-section { margin: 0; }
 .wallet-foot { margin-top: 26px; text-align: center; font-size: 12.5px; color: var(--text-3); }
 
-.search-fab {
-  position: fixed; z-index: 20; right: max(18px, calc((100vw - 460px) / 2 + 2px)); bottom: max(18px, calc(env(safe-area-inset-bottom) - 4px));
-  width: 58px; height: 58px; border-radius: 50%; border: 1px solid var(--border); display: grid; place-items: center; cursor: pointer; color: var(--text);
-  background: color-mix(in srgb, var(--surface-2) 85%, transparent); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-  box-shadow: 0 12px 30px -10px rgba(0, 0, 0, 0.6); transition: transform var(--ease);
-}
-.search-fab:active { transform: scale(0.92); }
-.searchbar { position: sticky; top: env(safe-area-inset-top); z-index: 20; display: flex; flex-direction: column; gap: 10px; padding: 14px 0 16px; background: var(--bg); }
+.searchbar { display: flex; flex-direction: column; gap: 10px; padding: 0 2px 14px; }
 .search-row { display: flex; gap: 10px; align-items: center; }
 .search-row .search { flex: 1; }
 .search input { border: 0; background: var(--surface-2); }
@@ -631,12 +628,12 @@ body:has(.wallet) { overflow: hidden; }
 
 /* ---- premium polish: springs, depth, materials ---- */
 /* glass buttons, pressed with a spring */
-.round-btn, .pill-btn, .search-fab {
+.round-btn, .pill-btn {
   background: color-mix(in srgb, var(--surface-2) 78%, transparent); border: 1px solid var(--border);
   -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
   transition: transform 360ms var(--bounce), background var(--ease);
 }
-.round-btn:active, .pill-btn:active, .search-fab:active { transform: scale(0.88); }
+.round-btn:active, .pill-btn:active { transform: scale(0.88); }
 .round-btn:active { background: var(--surface-3); }
 .btn { transition: background var(--ease), border-color var(--ease), transform 320ms var(--bounce), opacity var(--ease), color var(--ease); }
 .btn:active { transform: scale(0.95); }
@@ -659,7 +656,8 @@ body:has(.wallet) { overflow: hidden; }
 .stack .cardface:active, .stack .idface:active { transform: translateY(-6px) scale(1.01); }
 .wallet-head { position: relative; z-index: 30; animation: fade-down 480ms var(--glide) both; }
 @keyframes fade-down { from { opacity: 0; transform: translateY(-8px); } }
-.searchbar { animation: fade-down 320ms var(--glide) both; }
+.searchbar .chips { animation: fade-down 260ms var(--glide) both; }
+.search input { min-height: 40px; font-size: 16px; }
 
 /* the focused card: a gloss sweeps across as it arrives, details rise under it, the pile springs up */
 .focus-card .cf-side::after {

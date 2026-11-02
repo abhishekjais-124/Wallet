@@ -342,7 +342,9 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query); // typing stays instant; the list catches up
   const [filter, setFilter] = useState("all");
-  const [searching, setSearching] = useState(false);
+  // the search field is always on the home screen; the filters show while it is in use
+  const [focused, setFocused] = useState(false);
+  const searching = focused || query !== "" || filter !== "all";
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Card | "new" | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -390,32 +392,13 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   const upsert = async (card: Card) => {
     await save(cards.some((c) => c.id === card.id) ? cards.map((c) => (c.id === card.id ? card : c)) : [...cards, card]);
   };
-  const stopSearch = () => { setSearching(false); setQuery(""); setFilter("all"); };
+  const stopSearch = () => { setFocused(false); setQuery(""); setFilter("all"); (document.activeElement as HTMLElement | null)?.blur?.(); };
 
   return (
     <>
       <div className="status-scrim" aria-hidden="true" />
       <main className="page wallet">
-        {searching ? (
-          <div className="searchbar">
-            <div className="search-row">
-              <div className="search">
-                <Icon name="search" />
-                <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Bank, name, last four…"
-                  aria-label="Search cards and IDs" autoComplete="off" autoFocus />
-              </div>
-              <button type="button" className="pill-btn" onClick={stopSearch}>Cancel</button>
-            </div>
-            {cards.length > 0 && (
-              <div className="chips" role="tablist" aria-label="Filter cards">
-                {filters.map((f) => (
-                  <button key={f.id} role="tab" aria-selected={filter === f.id} className={`chip-btn${filter === f.id ? " on" : ""}`} onClick={() => setFilter(f.id)}>{f.label}</button>
-                ))}
-              </div>
-            )}
-          </div>
-        ) : (
-          <header className="wallet-head">
+        <header className="wallet-head">
             <h1>Wallet</h1>
             <div className="head-actions">
               <Menu label="Add" icon="plus" items={[
@@ -429,6 +412,24 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
               ]} />
             </div>
           </header>
+        {(cards.length > 0 || docs.length > 0) && (
+          <div className={`searchbar${searching ? " on" : ""}`}>
+            <div className="search-row">
+              <div className="search">
+                <Icon name="search" />
+                <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search cards and IDs"
+                  aria-label="Search cards and IDs" autoComplete="off" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} />
+              </div>
+              {searching && <button type="button" className="pill-btn" onMouseDown={(e) => e.preventDefault()} onClick={stopSearch}>Cancel</button>}
+            </div>
+            {searching && cards.length > 0 && (
+              <div className="chips" role="tablist" aria-label="Filter cards">
+                {filters.map((f) => (
+                  <button key={f.id} role="tab" aria-selected={filter === f.id} className={`chip-btn${filter === f.id ? " on" : ""}`} onMouseDown={(e) => e.preventDefault()} onClick={() => setFilter(f.id)}>{f.label}</button>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {settings.bio.offer && !bioDismissed && (
@@ -487,9 +488,6 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
         </div>
       </main>
 
-      {!searching && (cards.length > 0 || docs.length > 0) && (
-        <button type="button" className="search-fab" onClick={() => setSearching(true)} aria-label="Search"><Icon name="search" size={24} /></button>
-      )}
 
       {open && (
         <Detail card={open} onClose={closeCard}

@@ -57,6 +57,8 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
         t.style.setProperty("--shift", `${shift(i)}px`);
         // how far a tile above the line has folded away (0 open, 1 a strip): it recedes and dims with it
         t.style.setProperty("--fold", `${Math.min(1, Math.max(0, p - i))}`);
+        // how far a tile at or after the line has opened (1 open, 0 a strip): the last tile has nothing covering it
+        t.style.setProperty("--open", `${1 - Math.min(1, Math.max(0, i - p))}`);
       });
 
       const best = tiles[Math.round(p)]!;
