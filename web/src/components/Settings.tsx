@@ -9,7 +9,7 @@ import { downloadJson, readSealedFile, vaultOnly, type BackupFile, type ThemePre
 import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
 import type { SyncState } from "../App.tsx";
 import { nativeBio } from "../bio.ts";
-import { BioSetup } from "./BioSetup.tsx";
+import { bioIcon, BioSetup } from "./BioSetup.tsx";
 import { RecoveryInput } from "./Recovery.tsx";
 
 // iOS shows the number pad for inputmode="numeric" with a digits-only pattern
@@ -67,6 +67,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
   const [busy, setBusy] = useState(false);
   const [joinForm, setJoinForm] = useState({ key: "", pin: "" });
   const [confirmNew, setConfirmNew] = useState(false);
+  const [bioOpen, setBioOpen] = useState(false);
   // a backup made since the recovery key opens with that key; older ones with the PIN they were made with
   const pendingRecovery = !!pending && isV2(pending);
 
@@ -162,145 +163,174 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
     setBusy(false);
   }
 
+  const time = (at?: number) => new Date(at ?? Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const syncStatus = sync.status === "syncing" ? "Syncing…" : sync.status === "ok" ? `Synced ${time(sync.at)}` : sync.message;
+  const signedIn = sync.enabled && sync.status !== "off";
+
   return (
     <Sheet title="Settings" onClose={onClose}>
       <div className="settings">
-        <section>
-          <h3>Appearance</h3>
-          <Segmented label="Theme" value={theme} onChange={onTheme}
-            options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
-        </section>
-
-        <section>
-          <h3>{bio.label}</h3>
-          {bio.enrolled ? (
-            <>
-              <p className="sync-line"><span className="sync-dot ok" /><span className="grow">{bio.label} unlock is on for this device.<br />
-                <small>{nativeBio ? "The PIN is kept in this iPhone's Keychain behind Face ID" : "The PIN is wrapped by this device's passkey"} and never leaves it. Changing the PIN turns this off.</small></span></p>
-              <div className="actions-row"><button className="btn" onClick={bio.onForget}>Turn off</button></div>
-            </>
-          ) : bio.available ? (
-            <>
-              <p className="fine">Unlock with {bio.label} instead of typing the PIN. The PIN stays the real key; it is stored on this device
-                wrapped by a passkey that only opens after {bio.label}.</p>
-              <BioSetup pin={bio.pin} sealed={sealed} onDone={() => { bio.onEnrolled(); toast(`${bio.label} unlock is on`); }} />
-            </>
-          ) : (
-            <p className="fine">Not available in this browser. It needs a device with {bio.label} and a recent browser (iOS 18, Safari 18 or Chrome).</p>
-          )}
-        </section>
-
-        <section>
-          <h3>Auto-lock</h3>
-          <p className="fine">Locks after this long without a tap, and whenever the app stays in the background for a minute.</p>
-          <Segmented label="Auto-lock" value={String(lockMinutes)} onChange={(v) => onLockMinutes(Number(v))}
-            options={[{ value: "1", label: "1 min" }, { value: "5", label: "5 min" }, { value: "15", label: "15 min" }]} />
-        </section>
+        <Group>
+          <Row icon={<Icon name={theme === "dark" ? "moon" : "sun"} size={18} />} title="Appearance">
+            <Segmented label="Theme" value={theme} onChange={onTheme}
+              options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
+          </Row>
+          <Row icon={<Icon name={bioIcon()} size={18} />} title={bio.label}
+            sub={bio.enrolled ? "On for this device" : bio.available ? "Unlock without typing the PIN" : "Not available in this browser"}
+            right={bio.enrolled ? <Switch on label={`Turn off ${bio.label}`} onChange={bio.onForget} />
+              : bio.available ? <Switch on={false} label={`Set up ${bio.label}`} onChange={() => setBioOpen(!bioOpen)} /> : null}>
+            {!bio.enrolled && bio.available && bioOpen && (
+              <BioSetup pin={bio.pin} sealed={sealed} onDone={() => { bio.onEnrolled(); setBioOpen(false); toast(`${bio.label} unlock is on`); }} />
+            )}
+          </Row>
+          <Row icon={<Icon name="clock" size={18} />} title="Auto-lock" sub="Also locks a minute after you leave the app">
+            <Segmented label="Auto-lock" value={String(lockMinutes)} onChange={(v) => onLockMinutes(Number(v))}
+              options={[{ value: "1", label: "1 min" }, { value: "5", label: "5 min" }, { value: "15", label: "15 min" }]} />
+          </Row>
+        </Group>
 
         {sync.enabled && (
-          <section>
-            <h3>Sync with Google</h3>
-            {sync.status === "off" ? (
-              <>
-                <p className="fine">Keeps the same cards on your phone and computer. Only the encrypted vault is stored, in a hidden
-                  app folder in your Google Drive, locked by your recovery key. A new device asks for that key once, then for its own PIN.</p>
-                <button className="btn" onClick={sync.onSignIn}><GoogleMark /> Sign in with Google</button>
-              </>
+          <Group label="Sync">
+            {!signedIn ? (
+              <Row icon={<GoogleMark />} title="Sync with Google" sub="Same cards on your phone and computer"
+                right={<button className="btn sm primary" onClick={sync.onSignIn}>Sign in</button>} />
             ) : (
-              <>
-                <p className="sync-line">
-                  <span className={`sync-dot ${sync.status}`} />
-                  <span className="grow">{sync.email ?? "Google account"}<br />
-                    <small>{sync.status === "syncing" ? "Syncing…" : sync.status === "ok" ? `Synced ${new Date(sync.at ?? Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : sync.message}</small>
-                  </span>
-                </p>
-                <div className="actions-row">
-                  {sync.status === "error" && sync.message?.includes("Sign in") ? (
-                    <button className="btn" onClick={sync.onSignIn}><GoogleMark /> Sign in again</button>
-                  ) : (
-                    <button className="btn" onClick={sync.onSyncNow} disabled={sync.status === "syncing"}><Icon name="flip" /> Sync now</button>
-                  )}
-                  <button className="btn ghost" onClick={sync.onSignOut}>Sign out</button>
-                </div>
+              <Row icon={<GoogleMark />} title={sync.email ?? "Google account"}
+                sub={<><span className={`sync-dot ${sync.status}`} /> {syncStatus}</>}
+                right={sync.status === "error" && sync.message?.includes("Sign in")
+                  ? <button className="btn sm" onClick={sync.onSignIn}>Sign in</button>
+                  : <button className="btn sm" onClick={sync.onSyncNow} disabled={sync.status === "syncing"}>Sync now</button>}>
                 {recovery.join && (
                   <form className="inline-form" onSubmit={joinWallet} autoComplete="off">
+                    <p className="fine">Enter the recovery key from your other device to keep syncing.</p>
                     <RecoveryInput value={joinForm.key} onChange={(key) => setJoinForm({ ...joinForm, key })} />
                     <input type="password" placeholder="PIN of this device" value={joinForm.pin} onChange={(e) => setJoinForm({ ...joinForm, pin: digits(e.target.value) })} {...pinInput} autoComplete="current-password" />
                     <button className="btn primary" disabled={busy || joinForm.key.length < 29 || !isPin(joinForm.pin)}><Icon name="key" /> Join and merge</button>
                     {error?.where === "join" && <p className="form-error" role="alert">{error.text}</p>}
                   </form>
                 )}
-              </>
+              </Row>
             )}
-          </section>
+          </Group>
         )}
 
-        {recovery.on && (
-          <section>
-            <h3>Recovery key</h3>
-            <p className="fine">Google Drive and backup files open only with the recovery key, never with the PIN, so a stolen copy
-              cannot be guessed open. Lost it? Make a new one while this device is unlocked; the old key stops working for new copies.</p>
-            {confirmNew ? (
-              <div className="actions-row">
-                <button className="btn primary" disabled={busy} onClick={() => void newKey()}><Icon name="key" /> Make the new key</button>
-                <button className="btn ghost" onClick={() => setConfirmNew(false)}>Cancel</button>
-              </div>
-            ) : (
-              <div className="actions-row"><button className="btn" onClick={() => setConfirmNew(true)}><Icon name="key" /> Make a new recovery key</button></div>
-            )}
-            {error?.where === "recovery" && <p className="form-error" role="alert">{error.text}</p>}
-          </section>
-        )}
-
-        <section>
-          <h3>Backup</h3>
-          <p className="fine">The backup file is the encrypted vault with your ID files. It opens with the recovery key (older backups with the
-            PIN they were made with). Use it to move cards between devices or to keep a copy somewhere safe.</p>
-          <div className="actions-row">
-            <button className="btn" disabled={busy} onClick={() => void exportBackup()}>
-              <Icon name="download" /> Export backup
-            </button>
-            <label className="btn">
-              <Icon name="upload" /> Import backup
-              <input type="file" accept="application/json,.json" hidden onChange={pickBackup} />
-            </label>
-          </div>
-          {pending && (
-            <form className="inline-form" onSubmit={mergeBackup}>
-              <label className="field">
-                <span>{pendingRecovery ? "Recovery key" : pending.pin ? "PIN" : "Passphrase"} of the backup</span>
-                {pendingRecovery ? <RecoveryInput value={importPass} onChange={setImportPass} autoFocus />
-                  : <input type="password" value={importPass} onChange={(e) => setImportPass(e.target.value)} autoFocus autoComplete="off" {...(pending.pin ? pinInput : {})} />}
-              </label>
-              <button className="btn primary" disabled={busy || !importPass}>Import cards</button>
+        <Group label="Security and data">
+          <Fold icon="lock" title={sealed.pin ? "Change PIN" : "Switch to a 9-digit PIN"} hint="Needs your current PIN">
+            <form className="inline-form" onSubmit={changePassphrase} autoComplete="off">
+              <input type="password" placeholder={sealed.pin ? "Current PIN" : "Current passphrase"} value={pw.current}
+                onChange={(e) => setPw({ ...pw, current: e.target.value })} {...(sealed.pin ? pinInput : {})} autoComplete="current-password" />
+              <input type="password" placeholder="New 9-digit PIN" value={pw.next} onChange={(e) => setPw({ ...pw, next: digits(e.target.value) })} {...pinInput} />
+              <input type="password" placeholder="Repeat new PIN" value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: digits(e.target.value) })} {...pinInput} />
+              <button className="btn" disabled={busy || !pw.current || !pw.next}>{sealed.pin ? "Change PIN" : "Switch to PIN"}</button>
             </form>
+            {error?.where === "pw" && <p className="form-error" role="alert">{error.text}</p>}
+          </Fold>
+
+          {recovery.on && (
+            <Fold icon="key" title="Recovery key" hint="Opens your wallet on a new device">
+              <p className="fine">Google Drive and backup files open only with the recovery key, never with the PIN. Lost it? Make a
+                new one here; the old key stops working for new copies.</p>
+              {confirmNew ? (
+                <div className="actions-row">
+                  <button className="btn primary" disabled={busy} onClick={() => void newKey()}>Make the new key</button>
+                  <button className="btn ghost" onClick={() => setConfirmNew(false)}>Cancel</button>
+                </div>
+              ) : (
+                <div className="actions-row"><button className="btn" onClick={() => setConfirmNew(true)}>Make a new recovery key</button></div>
+              )}
+              {error?.where === "recovery" && <p className="form-error" role="alert">{error.text}</p>}
+            </Fold>
           )}
-          {error?.where === "import" && <p className="form-error" role="alert">{error.text}</p>}
-        </section>
 
-        <section>
-          <h3>{sealed.pin ? "Change PIN" : "Switch to a 9-digit PIN"}</h3>
-          <form className="inline-form" onSubmit={changePassphrase} autoComplete="off">
-            <input type="password" placeholder={sealed.pin ? "Current PIN" : "Current passphrase"} value={pw.current}
-              onChange={(e) => setPw({ ...pw, current: e.target.value })} {...(sealed.pin ? pinInput : {})} autoComplete="current-password" />
-            <input type="password" placeholder="New 9-digit PIN" value={pw.next} onChange={(e) => setPw({ ...pw, next: digits(e.target.value) })} {...pinInput} />
-            <input type="password" placeholder="Repeat new PIN" value={pw.repeat} onChange={(e) => setPw({ ...pw, repeat: digits(e.target.value) })} {...pinInput} />
-            <button className="btn" disabled={busy || !pw.current || !pw.next}><Icon name="key" /> {sealed.pin ? "Change PIN" : "Switch to PIN"}</button>
-          </form>
-          {error?.where === "pw" && <p className="form-error" role="alert">{error.text}</p>}
-        </section>
+          <Fold icon="download" title="Backup and restore" hint="Save or load an encrypted file">
+            <p className="fine">The file holds your cards and ID files, encrypted. It opens with the recovery key (older backups with
+              the PIN they were made with).</p>
+            <div className="actions-row">
+              <button className="btn" disabled={busy} onClick={() => void exportBackup()}><Icon name="download" /> Export</button>
+              <label className="btn">
+                <Icon name="upload" /> Import
+                <input type="file" accept="application/json,.json" hidden onChange={pickBackup} />
+              </label>
+            </div>
+            {pending && (
+              <form className="inline-form" onSubmit={mergeBackup}>
+                <label className="field">
+                  <span>{pendingRecovery ? "Recovery key" : pending.pin ? "PIN" : "Passphrase"} of the backup</span>
+                  {pendingRecovery ? <RecoveryInput value={importPass} onChange={setImportPass} autoFocus />
+                    : <input type="password" value={importPass} onChange={(e) => setImportPass(e.target.value)} autoFocus autoComplete="off" {...(pending.pin ? pinInput : {})} />}
+                </label>
+                <button className="btn primary" disabled={busy || !importPass}>Import cards</button>
+              </form>
+            )}
+            {error?.where === "import" && <p className="form-error" role="alert">{error.text}</p>}
+          </Fold>
 
-        <section className="danger-zone">
-          <h3>Erase wallet</h3>
-          <p className="fine">Deletes every card from this device. Export a backup first if you want to keep them. Type ERASE to confirm.</p>
-          <div className="inline-form">
-            <input value={erase} onChange={(e) => setErase(e.target.value)} placeholder="ERASE" autoComplete="off" />
-            <button className="btn danger" disabled={erase !== "ERASE"} onClick={onErase}><Icon name="trash" /> Erase everything</button>
-          </div>
-        </section>
+          {signedIn && (
+            <Fold icon="cloud" title="Google account" hint={sync.email ?? undefined}>
+              <p className="fine">Signing out stops syncing on this device. Your cards stay here, and the copy in Drive stays there.</p>
+              <div className="actions-row"><button className="btn" onClick={sync.onSignOut}>Sign out</button></div>
+            </Fold>
+          )}
+        </Group>
+
+        <Group>
+          <Fold icon="trash" title="Erase wallet" hint="Delete everything on this device" danger>
+            <p className="fine">Export a backup first if you want to keep your cards. Type ERASE to confirm.</p>
+            <div className="inline-form">
+              <input value={erase} onChange={(e) => setErase(e.target.value)} placeholder="ERASE" autoComplete="off" />
+              <button className="btn danger" disabled={erase !== "ERASE"} onClick={onErase}><Icon name="trash" /> Erase everything</button>
+            </div>
+          </Fold>
+        </Group>
+
+        <p className="settings-foot"><Icon name="shield" size={13} /> AES-256-GCM · encrypted on this device</p>
       </div>
     </Sheet>
   );
+}
+
+type IconName = React.ComponentProps<typeof Icon>["name"];
+
+function Group({ label, children }: { label?: string; children: React.ReactNode }) {
+  return (
+    <section className="group">
+      {label && <h3>{label}</h3>}
+      <div className="group-card">{children}</div>
+    </section>
+  );
+}
+
+function Row({ icon, title, sub, right, children }: {
+  icon: React.ReactNode; title: string; sub?: React.ReactNode; right?: React.ReactNode; children?: React.ReactNode;
+}) {
+  return (
+    <div className="set-row">
+      <div className="set-main">
+        <span className="set-icon">{icon}</span>
+        <span className="set-text"><b>{title}</b>{sub && <small>{sub}</small>}</span>
+        {right}
+      </div>
+      {children && <div className="set-below">{children}</div>}
+    </div>
+  );
+}
+
+/** A setting used now and then: one line until tapped. */
+function Fold({ icon, title, hint, danger, children }: { icon: IconName; title: string; hint?: string; danger?: boolean; children: React.ReactNode }) {
+  return (
+    <details className={`fold${danger ? " danger" : ""}`}>
+      <summary className="set-main">
+        <span className="set-icon"><Icon name={icon} size={18} /></span>
+        <span className="set-text"><b>{title}</b>{hint && <small>{hint}</small>}</span>
+        <span className="chev"><Icon name="chevron" size={18} /></span>
+      </summary>
+      <div className="fold-body">{children}</div>
+    </details>
+  );
+}
+
+function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: () => void }) {
+  return <button type="button" role="switch" aria-checked={on} aria-label={label} className={`switch${on ? " on" : ""}`} onClick={onChange} />;
 }
 
 export function GoogleMark() {
