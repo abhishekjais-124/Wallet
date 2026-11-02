@@ -589,7 +589,7 @@ body:has(.wallet) { overflow: hidden; }
 }
 .stack > li > .idface::after { border-radius: 5cqw; }
 
-.stack > li.active { z-index: 2; }
+/* no z-index on the open tile: the next card must slide over it from the first pixel, not pop on top once it opens */
 /* the open card paints above the strips, so its shadow must stay close or it hazes the strip beneath */
 .stack > li.active .cardface, .stack > li.active .idface { box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08), 0 6px 14px -10px rgba(0, 0, 0, 0.6); }
 :root[data-theme="light"] .stack > li.active .cardface, :root[data-theme="light"] .stack > li.active .idface { box-shadow: 0 0 0 0.5px rgba(16, 20, 40, 0.08), 0 6px 14px -10px rgba(16, 20, 40, 0.3); }
