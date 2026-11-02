@@ -555,7 +555,7 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 
 /* recovery key */
 .recovery { display: flex; flex-direction: column; gap: 14px; }
-.recovery-code { display: block; padding: 16px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); font: 650 18px/1.5 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-align: center; word-break: break-all; user-select: all; }
+.recovery-code { display: block; padding: 16px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent-text); font: 650 clamp(13px, 4vw, 18px)/1.5 ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.02em; text-align: center; white-space: nowrap; overflow-x: auto; user-select: all; }
 .recovery-input { font-family: ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.04em; text-transform: uppercase; }
 .lock-form .recovery-input { padding: 13px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface-2); color: var(--text); font-size: 15px; text-align: center; }
 .check { display: flex; gap: 10px; align-items: center; font-size: 14.5px; color: var(--text-2); cursor: pointer; }

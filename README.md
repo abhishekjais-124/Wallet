@@ -108,3 +108,20 @@ web/src/components/       CardFace, Lock, Editor, Detail, Settings
 web/src/palette.ts        colours from a card photo
 web/public/sw.js          offline app shell
 ```
+
+## iPhone app (`ios/`)
+
+A small Swift app that shows the same web app in a web view, so Face ID is a plain face scan (no Safari passkey
+sheet). The 9-digit PIN is kept in the iOS Keychain behind Face ID (`biometryCurrentSet`, this device only) and handed
+to the page through the `walletBio` message handler, which answers only aj124.com's main frame. Files the page saves
+(backups, the recovery key, ID files) open the share sheet. The app has its own storage, separate from the Safari
+home-screen app: restore with Google or a backup the first time.
+
+Build and install on a connected iPhone (automatic signing, team set in the project):
+
+```bash
+cd ios && xcodebuild -project Wallet.xcodeproj -scheme Wallet -configuration Release -destination 'id=<device udid>' -allowProvisioningUpdates build
+xcrun devicectl device install app --device <device udid> <derived data>/Build/Products/Release-iphoneos/Wallet.app
+```
+
+`WALLET_URL=http://localhost:8788/Wallet/` in the launch environment points it at a local build.

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { digits } from "@shared/card.ts";
 import { isPin, unlock, WrongPassphraseError, type SealedVault } from "@shared/vault.ts";
-import { beginEnrol, bioErrorMessage, bioLabel, finishEnrol, type PendingEnrolment } from "../bio.ts";
+import { beginEnrol, bioErrorMessage, bioLabel, finishEnrol, nativeBio, type PendingEnrolment } from "../bio.ts";
 import { Icon } from "../ui.tsx";
 
 export const bioIcon = (): "touchid" | "faceid" => (bioLabel() === "Touch ID" ? "touchid" : "faceid");
@@ -32,7 +32,12 @@ export function BioSetup({ pin, sealed, onDone, onCancel, compact }: {
         if (!isPin(typed)) throw new Error("Enter your 9-digit PIN first.");
         await unlock(sealed, typed); // proves the PIN before a passkey is made for it
       }
-      setPending(await beginEnrol());
+      const p = await beginEnrol();
+      if (nativeBio) {
+        await finishEnrol(p, secret); // the app's own Face ID: one check is enough
+        return onDone();
+      }
+      setPending(p);
     } catch (err) {
       setError(err instanceof WrongPassphraseError ? "Wrong PIN." : bioErrorMessage(err));
     }

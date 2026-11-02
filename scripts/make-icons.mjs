@@ -18,7 +18,7 @@ const maskable = square.replace('<g id="art">', '<g id="art" transform="translat
 
 function render(name, size, source = svg) {
   const html = `<!doctype html><html><body style="margin:0;background:transparent;width:${size}px;height:${size}px">${source.replace(/width="512" height="512"/, `width="${size}" height="${size}"`)}</body></html>`;
-  const file = path.join(tmp, `${name}.html`);
+  const file = path.join(tmp, `${path.basename(name)}.html`);
   fs.writeFileSync(file, html);
   const out = path.join(dir, name);
   execFileSync(chrome, [
@@ -32,4 +32,5 @@ render("icon-192.png", 192);
 render("icon-512.png", 512);
 render("icon-512-maskable.png", 512, maskable);
 render("apple-touch-icon.png", 180, square);
+render("../../../ios/Wallet/Assets.xcassets/AppIcon.appiconset/AppIcon.png", 1024, square);
 fs.rmSync(tmp, { recursive: true, force: true });

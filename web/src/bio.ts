@@ -5,6 +5,9 @@
  * Nothing here weakens the vault: unlocking still derives the vault key from the PIN as before, and the wrapped
  * PIN is useless without the biometric check. Needs a secure context and a browser with PRF support
  * (iOS 18 / Safari 18 / recent Chrome); otherwise the PIN pad stays the only way in.
+ *
+ * Inside the Wallet iPhone app (ios/) the app does it instead: the PIN sits in the iOS Keychain behind Face ID,
+ * reached through the `walletBio` message handler, so unlocking is a plain face scan with no passkey sheet.
  */
 
 const KEY = "wallet.bio.v1";
@@ -21,6 +24,12 @@ export interface PendingEnrolment {
   credId: string;
   salt: string;
 }
+
+type NativeBio = { postMessage: (m: { op: string; pin?: string }) => Promise<unknown> };
+const native = (window as { webkit?: { messageHandlers?: { walletBio?: NativeBio } } }).webkit?.messageHandlers?.walletBio;
+/** Running inside the Wallet iPhone app, which does Face ID itself. */
+export const nativeBio = !!native;
+const NATIVE_KEY = "wallet.bio.native";
 
 export class BioUnsupportedError extends Error {}
 /** The passkey worked but the stored wrap no longer opens: the PIN changed, or the wrap was damaged. */
@@ -43,6 +52,7 @@ export function bioLabel(): string {
 /** True when this device has a biometric authenticator the browser can use. */
 export async function available(): Promise<boolean> {
   try {
+    if (native) return !!(await native.postMessage({ op: "available" }));
     return !!window.PublicKeyCredential && window.isSecureContext &&
       (await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
   } catch {
@@ -51,7 +61,7 @@ export async function available(): Promise<boolean> {
 }
 
 export function enrolled(): boolean {
-  return !!read();
+  return native ? localStorage.getItem(NATIVE_KEY) === "1" : !!read();
 }
 
 function read(): Enrolment | null {
@@ -65,10 +75,13 @@ function read(): Enrolment | null {
 
 export function forget(): void {
   localStorage.removeItem(KEY);
+  localStorage.removeItem(NATIVE_KEY);
+  if (native) void native.postMessage({ op: "delete" }).catch(() => {});
 }
 
 /** Step 1: create the passkey (one biometric prompt). Throws BioUnsupportedError when PRF is not offered. */
 export async function beginEnrol(): Promise<PendingEnrolment> {
+  if (native) return { credId: "native", salt: "" }; // the app's single Face ID check happens in finishEnrol
   const cred = (await navigator.credentials.create({
     publicKey: {
       rp: { id: location.hostname, name: "Wallet" },
@@ -88,6 +101,10 @@ export async function beginEnrol(): Promise<PendingEnrolment> {
 
 /** Step 2: one more biometric prompt gives the secret; the PIN is wrapped with it and kept on this device. */
 export async function finishEnrol(pending: PendingEnrolment, pin: string): Promise<void> {
+  if (native) {
+    await native.postMessage({ op: "save", pin });
+    return localStorage.setItem(NATIVE_KEY, "1");
+  }
   const key = await prfKey(pending.credId, pending.salt);
   const iv = random(12);
   const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(pin));
@@ -98,6 +115,15 @@ export async function finishEnrol(pending: PendingEnrolment, pin: string): Promi
 /** Biometric prompt, then the PIN. Throws when cancelled, unsupported or when the stored wrap no longer opens. */
 export async function unlockWithBio(): Promise<string> {
   const e = read();
+  if (native) {
+    try {
+      return String(await native.postMessage({ op: "read" }));
+    } catch (err) {
+      // the Keychain item is gone: Face ID was re-enrolled, or the app was reinstalled
+      if ((err as Error).message === "stale") throw new BioStaleError("stale");
+      throw err;
+    }
+  }
   if (!e) throw new Error(`${bioLabel()} is not set up on this device.`);
   const key = await prfKey(e.credId, e.salt);
   try {

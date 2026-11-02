@@ -29,6 +29,12 @@ export function PinPad({ onComplete, busy }: { onComplete: (pin: string) => Prom
     });
   };
   const back = () => !busy && setPin(pinRef.current.slice(0, -1));
+  // a key counts on touch-down, like the iPhone passcode pad, so quick taps are never merged or dropped;
+  // a click with no pointer (keyboard, switch control) still works
+  const key = (fn: () => void) => ({
+    onPointerDown: (e: React.PointerEvent) => { e.preventDefault(); fn(); },
+    onClick: (e: React.MouseEvent) => { if (e.detail === 0) fn(); },
+  });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -46,11 +52,11 @@ export function PinPad({ onComplete, busy }: { onComplete: (pin: string) => Prom
       </div>
       <div className="pin-keys">
         {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((d) => (
-          <button key={d} type="button" className="pin-key" onClick={() => press(d)} disabled={busy}>{d}</button>
+          <button key={d} type="button" className="pin-key" {...key(() => press(d))} disabled={busy}>{d}</button>
         ))}
         <span />
-        <button type="button" className="pin-key" onClick={() => press("0")} disabled={busy}>0</button>
-        <button type="button" className="pin-key ghost" onClick={back} disabled={busy || !pin} aria-label="Delete digit"><Icon name="back" size={22} /></button>
+        <button type="button" className="pin-key" {...key(() => press("0"))} disabled={busy}>0</button>
+        <button type="button" className="pin-key ghost" {...key(back)} disabled={busy || !pin} aria-label="Delete digit"><Icon name="back" size={22} /></button>
       </div>
     </div>
   );

@@ -8,6 +8,7 @@ import { exportBlobs, importBlobs } from "../blobs.ts";
 import { downloadJson, readSealedFile, vaultOnly, type BackupFile, type ThemePref, type VaultData } from "../store.ts";
 import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
 import type { SyncState } from "../App.tsx";
+import { nativeBio } from "../bio.ts";
 import { BioSetup } from "./BioSetup.tsx";
 import { RecoveryInput } from "./Recovery.tsx";
 
@@ -175,7 +176,7 @@ export function Settings({ theme, onTheme, lockMinutes, onLockMinutes, sealed, c
           {bio.enrolled ? (
             <>
               <p className="sync-line"><span className="sync-dot ok" /><span className="grow">{bio.label} unlock is on for this device.<br />
-                <small>The PIN is wrapped by this device's passkey and never leaves it. Changing the PIN turns this off.</small></span></p>
+                <small>{nativeBio ? "The PIN is kept in this iPhone's Keychain behind Face ID" : "The PIN is wrapped by this device's passkey"} and never leaves it. Changing the PIN turns this off.</small></span></p>
               <div className="actions-row"><button className="btn" onClick={bio.onForget}>Turn off</button></div>
             </>
           ) : bio.available ? (
