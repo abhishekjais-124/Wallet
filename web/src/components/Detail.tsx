@@ -46,7 +46,7 @@ export function Detail({ card, pile, onEdit, onToggleFavorite, onDelete, onClose
           <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={24} /></button>
           {islandSupported && (
             <button className="action is-island" aria-label="Show in the Dynamic Island and copy the number for a minute" title="Dynamic Island"
-              onClick={() => { haptic("medium"); showInIsland(card).then(() => toast("In the Dynamic Island · number copied for 1 min"), (err: Error) => toast(err.message)); }}>
+              onClick={() => { haptic("medium"); showInIsland(card).then(() => toast("Number copied for 1 min · leave Wallet to see it in the Dynamic Island"), (err: Error) => toast(err.message)); }}>
               <Icon name="island" size={24} />
             </button>
           )}
