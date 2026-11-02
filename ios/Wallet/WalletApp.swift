@@ -30,6 +30,7 @@ struct WalletWebView: UIViewRepresentable {
     config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletBio")
     config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletGoogle")
     config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletHaptic")
+    config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletIsland")
 
     let web = WKWebView(frame: .zero, configuration: config)
     web.isOpaque = false
@@ -57,7 +58,28 @@ struct WalletWebView: UIViewRepresentable {
       switch message.name {
       case "walletGoogle": return await google(op, hint: body["hint"] as? String)
       case "walletHaptic": haptic(op); return (true, nil)
+      case "walletIsland": return await island(op, body)
       default: return await bio(op, body)
+      }
+    }
+
+    // the card in the Dynamic Island while its number is in the clipboard
+    private func island(_ op: String, _ body: [String: Any]) async -> (Any?, String?) {
+      do {
+        switch op {
+        case "available": return (Island.available, nil)
+        case "show":
+          try await Island.show(body)
+          return (true, nil)
+        case "end":
+          await Island.endAll()
+          return (true, nil)
+        default: return (nil, "Unknown request.")
+        }
+      } catch let error as IslandError {
+        return (nil, error.message)
+      } catch {
+        return (nil, error.localizedDescription)
       }
     }
 

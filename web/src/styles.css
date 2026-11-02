@@ -399,6 +399,7 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 .action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .action.is-fav { --tint: var(--fav); }
 .action.is-share { --tint: var(--accent); }
+.action.is-island { --tint: #30d158; }
 .action.is-danger { --tint: var(--danger); }
 .action.on svg path { fill: currentColor; }
 .action.armed { animation: arm 300ms ease; }

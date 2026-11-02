@@ -119,7 +119,14 @@ to the page through the `walletBio` message handler, which answers only aj124.co
 signs in through Safari's own sheet with a separate iOS OAuth client (code + PKCE, `ios/Wallet/Google.swift`), keeps
 the refresh token in the Keychain and hands the page short-lived access tokens (`walletGoogle` handler). The consent
 screen is published (In production) so the refresh token does not expire after 7 days; `drive.appdata` is a
-non-sensitive scope, so no Google review is needed. Its required privacy page is `web/public/privacy.html`. The app has its own storage, separate from the Safari
+non-sensitive scope, so no Google review is needed. Its required privacy page is `web/public/privacy.html`.
+
+**Dynamic Island.** The fifth action on an open card (`web/src/island.ts`, `ios/Wallet/Island.swift`) copies the
+number and starts a Live Activity drawn by the `WalletIsland` widget extension (`ios/WalletIsland/`): the card's
+bank, name, last four, expiry and network in the Dynamic Island and on the lock screen, with a countdown. Only what is
+printed on the face goes to the island; the full number sits in the clipboard with a one-minute expiry that iOS
+enforces, and the activity ends at the same moment, app awake or not. Needs an iPhone with the Dynamic Island
+(iPhone 14 Pro or later) and Live Activities allowed for Wallet. The app has its own storage, separate from the Safari
 home-screen app: restore with Google or a backup the first time.
 
 Build and install on a connected iPhone (automatic signing, team set in the project):

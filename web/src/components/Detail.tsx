@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { expiryState, formatNumber, last4, maskNumber, NETWORK_LABEL, type Card } from "@shared/card.ts";
+import { islandSupported, showInIsland } from "../island.ts";
 import { Focus, haptic, Icon, useAutoHide, useCopy, useToast } from "../ui.tsx";
 import { CardFace } from "./CardFace.tsx";
 import { ShareCard } from "./Share.tsx";
@@ -43,6 +44,12 @@ export function Detail({ card, pile, onEdit, onToggleFavorite, onDelete, onClose
             <Icon name="star" size={24} />
           </button>
           <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={24} /></button>
+          {islandSupported && (
+            <button className="action is-island" aria-label="Show in the Dynamic Island and copy the number for a minute" title="Dynamic Island"
+              onClick={() => { haptic("medium"); showInIsland(card).then(() => toast("In the Dynamic Island · number copied for 1 min"), (err: Error) => toast(err.message)); }}>
+              <Icon name="island" size={24} />
+            </button>
+          )}
           <button className="action is-edit" onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={24} /></button>
           <button className={`action is-danger${confirmDelete ? " armed" : ""}`} aria-label={confirmDelete ? "Tap again to delete" : "Delete"} title="Delete"
             onClick={() => { if (confirmDelete) onDelete(); else { haptic("medium"); setConfirmDelete(true); toast("Tap again to delete"); } }}>
