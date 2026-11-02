@@ -381,13 +381,10 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   }, [cards, deferredQuery, filter]);
 
   const open = cards.find((c) => c.id === openId) ?? null;
-  // the scroller with the spotlight: a tap on the open tile shows its details, a tap on a strip brings it in
+  // the scroller with the spotlight; a tap on any tile, open or strip, shows its details
   const spotRef = useRef<HTMLDivElement>(null);
-  const spot = useSpotlight(spotRef, `${shown.map((c) => c.id).join()}|${docs.length}|${filter}`);
-  const openCard = useCallback((id: string) => {
-    if (spot.activeId !== id) return spot.bring(id);
-    glide(id, () => setOpenId(id), true);
-  }, [spot]);
+  useSpotlight(spotRef, `${shown.map((c) => c.id).join()}|${docs.length}|${filter}`);
+  const openCard = useCallback((id: string) => glide(id, () => setOpenId(id), true), []);
   const closeCard = useCallback(() => { if (openId) glide(openId, () => setOpenId(null), false); }, [openId]);
   const upsert = async (card: Card) => {
     await save(cards.some((c) => c.id === card.id) ? cards.map((c) => (c.id === card.id ? card : c)) : [...cards, card]);
@@ -477,8 +474,7 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
           </ul>
         )}
 
-        <DocsView docs={docs} save={saveDocs} adding={addingDoc} onAdded={doneAddingDoc} query={filter === "all" ? deferredQuery : null}
-          activeId={spot.activeId} onBring={spot.bring} />
+        <DocsView docs={docs} save={saveDocs} adding={addingDoc} onAdded={doneAddingDoc} query={filter === "all" ? deferredQuery : null} />
 
         {!searching && (cards.length > 0 || docs.length > 0) && (
           <p className="wallet-foot">

@@ -8,6 +8,7 @@ import { haptic } from "./ui.tsx";
  * tile is). So as you scroll, the next card slides open
  * under your finger while the current one folds away, 1:1. CSS scroll-snap settles on a card when the scroll ends,
  * with the platform's own momentum. Returns which tile is open and a way to bring another one in.
+ * (Tapping any tile opens it directly; `bring` is kept for callers that want to scroll one in first.)
  */
 export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unknown) {
   const [activeId, setActiveId] = useState<string | null>(null);
