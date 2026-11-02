@@ -14,7 +14,7 @@ enum Island {
     guard let number = body["number"] as? String else { throw IslandError(message: "No number to copy.") }
     let s = { (k: String) in body[k] as? String ?? "" }
     let attrs = CardActivityAttributes(bank: s("bank"), name: s("name"), last4: s("last4"), expiry: s("expiry"), network: s("network"),
-                                       color1: s("color1"), color2: s("color2"))
+                                       number: s("formatted"), cvv: s("cvv"), color1: s("color1"), color2: s("color2"))
     let until = Date.now.addingTimeInterval(seconds)
     await endAll()
     // the number expires from the clipboard on its own too, in case the app is killed first

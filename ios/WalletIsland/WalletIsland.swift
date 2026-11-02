@@ -19,37 +19,39 @@ struct CardActivityWidget: Widget {
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          BankBadge(card: context.attributes).padding(.leading, 4)
-        }
-        DynamicIslandExpandedRegion(.trailing) {
-          Text(context.attributes.network.uppercased())
-            .font(.system(size: 13, weight: .heavy, design: .rounded).italic())
-            .foregroundStyle(.white.opacity(0.9))
-            .padding(.trailing, 4)
-        }
-        DynamicIslandExpandedRegion(.center) {
-          VStack(spacing: 2) {
-            Text(context.attributes.name).font(.system(size: 15, weight: .semibold)).lineLimit(1)
-            Text("•••• \(context.attributes.last4)").font(.system(size: 20, weight: .medium, design: .monospaced))
+          HStack(spacing: 6) {
+            BankDot(card: context.attributes)
+            Text(context.attributes.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
           }
           .foregroundStyle(.white)
         }
+        DynamicIslandExpandedRegion(.trailing) {
+          Text(context.attributes.network.uppercased())
+            .font(.system(size: 12, weight: .heavy, design: .rounded).italic())
+            .foregroundStyle(.white.opacity(0.9))
+        }
         DynamicIslandExpandedRegion(.bottom) {
-          HStack {
-            if context.isStale {
-              Label("Number cleared", systemImage: "checkmark.circle.fill").font(.system(size: 12, weight: .medium))
-              Spacer()
-            } else {
-              Label("Number copied", systemImage: "doc.on.doc.fill").font(.system(size: 12, weight: .medium))
-              Spacer()
-              Text("clears in ")
-                .font(.system(size: 12))
-              + Text(timerInterval: Date.now...context.state.until, countsDown: true)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+          VStack(alignment: .leading, spacing: 6) {
+            // the minute is up: iOS redraws the island with the details gone, whether or not Wallet is awake
+            Text(context.isStale ? "•••• •••• •••• \(context.attributes.last4)" : context.attributes.number)
+              .font(.system(size: 22, weight: .semibold, design: .monospaced))
+              .minimumScaleFactor(0.6).lineLimit(1)
+              .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 14) {
+              if context.isStale {
+                Label("Cleared", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+              } else {
+                Detail(label: "EXP", value: context.attributes.expiry)
+                if !context.attributes.cvv.isEmpty { Detail(label: "CVV", value: context.attributes.cvv) }
+                Spacer(minLength: 0)
+                Label { Text(timerInterval: Date.now...context.state.until, countsDown: true).monospacedDigit() }
+                  icon: { Image(systemName: "doc.on.doc.fill") }
+                  .foregroundStyle(.white.opacity(0.7))
+              }
             }
+            .font(.system(size: 13, weight: .semibold))
           }
-          .foregroundStyle(.white.opacity(0.85))
-          .padding(.horizontal, 4)
+          .foregroundStyle(.white)
           .padding(.top, 2)
         }
       } compactLeading: {
@@ -71,6 +73,19 @@ struct CardActivityWidget: Widget {
         }
       }
       .keylineTint(Color(hex: context.attributes.color2))
+      .contentMargins(.horizontal, 30, for: .expanded)
+      .contentMargins(.vertical, 16, for: .expanded)
+    }
+  }
+}
+
+private struct Detail: View {
+  let label: String
+  let value: String
+  var body: some View {
+    HStack(spacing: 5) {
+      Text(label).font(.system(size: 10, weight: .bold)).tracking(1).foregroundStyle(.white.opacity(0.55))
+      Text(value).font(.system(size: 15, weight: .semibold, design: .monospaced))
     }
   }
 }
