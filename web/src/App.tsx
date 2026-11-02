@@ -7,7 +7,7 @@ import {
 } from "@shared/vault.ts";
 import { available as bioAvailable, bioLabel, enrolled as bioEnrolled, forget as bioForget } from "./bio.ts";
 import { bioIcon, BioSetup } from "./components/BioSetup.tsx";
-import { account, CLIENT_ID, signIn, signOut, takeRedirect, token } from "./google.ts";
+import { account, CLIENT_ID, inApp, refresh, SIGNED_IN, signIn, signOut, takeRedirect, token } from "./google.ts";
 import { flushBlobs } from "./blobs.ts";
 import { clearMeta, meta, pull, push, setMeta, whoAmI } from "./sync.ts";
 import { CardFace } from "./components/CardFace.tsx";
@@ -147,9 +147,9 @@ export function App() {
 
   const syncNow = useCallback(async () => {
     if (!CLIENT_ID || !account()) return setSync({ status: "off" });
-    if (!token()) {
+    if (!token() && !(await refresh())) {
       // one silent round trip to Google per app launch, only while locked so nothing in progress is lost
-      if (!sessionRef.current && !sessionStorage.getItem(SILENT_KEY)) {
+      if (!inApp && !sessionRef.current && !sessionStorage.getItem(SILENT_KEY)) {
         sessionStorage.setItem(SILENT_KEY, "1");
         return signIn(true);
       }
@@ -242,7 +242,17 @@ export function App() {
     (back?.ok ? whoAmI().then(() => sessionStorage.removeItem(SILENT_KEY), () => {}) : Promise.resolve()).then(() => void syncNow());
     const onVisible = () => document.visibilityState === "visible" && void syncNow();
     document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
+    // the iPhone app's sign-in sheet closed: same as coming back from Google's redirect on the web
+    const onSignedIn = (e: Event) => {
+      const error = (e as CustomEvent<string | undefined>).detail;
+      if (error) return setSync({ status: "error", email: account(), message: error });
+      void whoAmI().then(() => syncNow(), (err: Error) => setSync({ status: "error", email: account(), message: err.message }));
+    };
+    window.addEventListener(SIGNED_IN, onSignedIn);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener(SIGNED_IN, onSignedIn);
+    };
   }, [syncNow]);
 
   return (

@@ -1,11 +1,12 @@
+import AuthenticationServices
 import LocalAuthentication
 import Security
 import SwiftUI
 import WebKit
 
 /// The Wallet web app (aj124.com/Wallet) in a native shell, so Face ID is a plain face scan like other apps instead of
-/// Safari's passkey sheet. Cards, crypto and sync all stay in the web app; this file only adds Face ID (the PIN kept in
-/// the Keychain behind Face ID) and saving files the page downloads.
+/// Safari's passkey sheet. Cards, crypto and sync all stay in the web app; the app only adds Face ID (the PIN kept in
+/// the Keychain behind Face ID), Google sign-in (Google.swift) and saving files the page downloads.
 @main
 struct WalletApp: App {
   var body: some Scene {
@@ -27,9 +28,7 @@ struct WalletWebView: UIViewRepresentable {
     let config = WKWebViewConfiguration()
     config.websiteDataStore = .default()
     config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletBio")
-    // Google refuses sign-in in web views that do not look like Safari
-    let major = UIDevice.current.systemVersion.split(separator: ".").first ?? "18"
-    config.applicationNameForUserAgent = "Version/\(major).0 Mobile/15E148 Safari/604.1"
+    config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletGoogle")
 
     let web = WKWebView(frame: .zero, configuration: config)
     web.isOpaque = false
@@ -44,15 +43,43 @@ struct WalletWebView: UIViewRepresentable {
   func updateUIView(_ web: WKWebView, context: Context) {}
 
   @MainActor
-  final class Coordinator: NSObject, WKScriptMessageHandlerWithReply, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+  final class Coordinator: NSObject, WKScriptMessageHandlerWithReply, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate,
+    ASWebAuthenticationPresentationContextProviding {
     private var downloaded: URL?
 
-    // ---- Face ID bridge: window.webkit.messageHandlers.walletBio.postMessage({ op, pin }) ----
+    // ---- bridges: window.webkit.messageHandlers.walletBio / walletGoogle .postMessage({ op, ... }) ----
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) async -> (Any?, String?) {
-      // only Wallet's own page may ask for the PIN
+      // only Wallet's own page may ask for the PIN or a Google token
       guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.host == home.host,
             let body = message.body as? [String: Any], let op = body["op"] as? String else { return (nil, "Not allowed.") }
+      return message.name == "walletGoogle" ? await google(op, hint: body["hint"] as? String) : await bio(op, body)
+    }
+
+    private func google(_ op: String, hint: String?) async -> (Any?, String?) {
+      do {
+        switch op {
+        case "signIn": return (try await GoogleAuth.signIn(from: self, hint: hint).reply, nil)
+        case "token": return (try await GoogleAuth.refresh()?.reply, nil)
+        case "signOut":
+          await GoogleAuth.signOut()
+          return (true, nil)
+        default: return (nil, "Unknown request.")
+        }
+      } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+        return (nil, "Sign-in was cancelled.")
+      } catch let error as GoogleError {
+        return (nil, error.message)
+      } catch {
+        return (nil, error.localizedDescription)
+      }
+    }
+
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+      UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.keyWindow }.first ?? ASPresentationAnchor()
+    }
+
+    private func bio(_ op: String, _ body: [String: Any]) async -> (Any?, String?) {
       do {
         switch op {
         case "available": return (PinStore.biometryLabel, nil)

@@ -114,7 +114,11 @@ web/public/sw.js          offline app shell
 A small Swift app that shows the same web app in a web view, so Face ID is a plain face scan (no Safari passkey
 sheet). The 9-digit PIN is kept in the iOS Keychain behind Face ID (`biometryCurrentSet`, this device only) and handed
 to the page through the `walletBio` message handler, which answers only aj124.com's main frame. Files the page saves
-(backups, the recovery key, ID files) open the share sheet. The app has its own storage, separate from the Safari
+(backups, the recovery key, ID files) open the share sheet. Google blocks its sign-in inside web views, so the app
+signs in through Safari's own sheet with a separate iOS OAuth client (code + PKCE, `ios/Wallet/Google.swift`), keeps
+the refresh token in the Keychain and hands the page short-lived access tokens (`walletGoogle` handler). The consent
+screen is published (In production) so the refresh token does not expire after 7 days; `drive.appdata` is a
+non-sensitive scope, so no Google review is needed. Its required privacy page is `web/public/privacy.html`. The app has its own storage, separate from the Safari
 home-screen app: restore with Google or a backup the first time.
 
 Build and install on a connected iPhone (automatic signing, team set in the project):
