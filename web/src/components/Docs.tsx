@@ -6,15 +6,19 @@ import {
 import { forgetFile, storeFile } from "../blobs.ts";
 import { openFile, pdfFile, photoFile, sizeLabel, toFile, useFileUrl } from "../files.ts";
 import { newId } from "../store.ts";
-import { Icon, Segmented, Sheet, useAutoHide, useCopy, useToast } from "../ui.tsx";
+import { Focus, glide, Icon, Segmented, Sheet, useAutoHide, useCopy, useToast } from "../ui.tsx";
 import { IdFace } from "./IdFace.tsx";
 
-/** The IDs tab: one tile per document, then the detail, editor and share sheets. */
-export function DocsView({ docs, save, adding, onAdded }: {
+/**
+ * The IDs, as a second stack under the cards (like passes in Apple Wallet), then the focused view, editor and share
+ * sheet. `query` filters them while searching; null hides the stack (a card-only filter is on).
+ */
+export function DocsView({ docs, save, adding, onAdded, query }: {
   docs: IdDoc[];
   save: (docs: IdDoc[]) => Promise<void>;
   adding: boolean;
   onAdded: () => void;
+  query: string | null;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<IdDoc | "new" | null>(null);
@@ -28,8 +32,13 @@ export function DocsView({ docs, save, adding, onAdded }: {
   }, []);
 
   const order: Record<DocType, number> = { aadhaar: 0, pan: 1, dl: 2 };
-  const shown = [...docs].sort((a, b) => order[a.type] - order[b.type] || a.name.localeCompare(b.name));
+  const q = query?.trim().toLowerCase() ?? "";
+  const shown = [...docs]
+    .filter((d) => !q || [d.name, DOC_LABEL[d.type]].some((x) => x.toLowerCase().includes(q)) || d.number.toLowerCase().endsWith(q))
+    .sort((a, b) => order[a.type] - order[b.type] || a.name.localeCompare(b.name));
   const open = docs.find((d) => d.id === openId) ?? null;
+  const openDoc = (id: string) => glide(id, () => setOpenId(id), true);
+  const closeDoc = () => { if (openId) glide(openId, () => setOpenId(null), false); };
   const upsert = async (draft: IdDoc) => {
     const doc = { ...draft, files: await Promise.all(draft.files.map(storeFile)) };
     const before = docs.find((d) => d.id === doc.id)?.files ?? [];
@@ -39,25 +48,24 @@ export function DocsView({ docs, save, adding, onAdded }: {
 
   return (
     <>
-      {docs.length === 0 ? (
-        <div className="empty">
-          <div className="empty-card"><IdFace doc={{ type: "aadhaar", name: "Your name", number: "", dob: "", files: [] }} /></div>
-          <h2>No IDs yet</h2>
-          <p className="muted">Keep your Aadhaar, PAN and driving licence here with a photo or the PDF of each. They are encrypted like your cards.</p>
-          <button className="btn primary" onClick={() => setEditing("new")}><Icon name="plus" /> Add an ID</button>
-        </div>
-      ) : (
-        <ul className="card-grid">
-          {shown.map((d, i) => (
-            <li key={d.id} style={{ "--i": i } as React.CSSProperties}>
-              <IdFace doc={d} onClick={() => setOpenId(d.id)} label={`Open ${DOC_LABEL[d.type]} of ${d.name}`} />
-            </li>
-          ))}
-        </ul>
+      {query !== null && shown.length > 0 && (
+        <section className="stack-section" aria-label="IDs">
+          <h2>IDs</h2>
+          <ul className="stack">
+            {shown.map((d, i) => (
+              <li key={d.id} data-tile={d.id} style={{ "--i": i } as React.CSSProperties}>
+                <IdFace doc={d} onClick={() => openDoc(d.id)} label={`Open ${DOC_LABEL[d.type]} of ${d.name}`} />
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {open && (
-        <DocDetail doc={open} onClose={() => setOpenId(null)} onEdit={() => { setEditing(open); setOpenId(null); }}
+        <DocDetail doc={open} onClose={closeDoc}
+          pile={shown.filter((d) => d.id !== open.id).slice(0, 4).map((d, k) => (
+            <div key={d.id} className="pile-card" style={{ "--k": k } as React.CSSProperties}><IdFace doc={d} /></div>
+          ))} onEdit={() => { setEditing(open); setOpenId(null); }}
           onDelete={async () => { await save(docs.filter((d) => d.id !== open.id)); open.files.forEach((f) => void forgetFile(f.id)); setOpenId(null); }} />
       )}
       {editing && (
@@ -68,7 +76,9 @@ export function DocsView({ docs, save, adding, onAdded }: {
   );
 }
 
-function DocDetail({ doc, onEdit, onDelete, onClose }: { doc: IdDoc; onEdit: () => void; onDelete: () => void; onClose: () => void }) {
+function DocDetail({ doc, pile, onEdit, onDelete, onClose }: {
+  doc: IdDoc; pile?: React.ReactNode; onEdit: () => void; onDelete: () => void; onClose: () => void;
+}) {
   const copy = useCopy();
   const toast = useToast();
   const [reveal, setReveal] = useAutoHide();
@@ -81,11 +91,10 @@ function DocDetail({ doc, onEdit, onDelete, onClose }: { doc: IdDoc; onEdit: () 
     return () => clearTimeout(t);
   }, [confirmDelete]);
 
-  if (sharing) return <DocShare doc={doc} onClose={() => setSharing(false)} />;
   return (
-    <Sheet title={DOC_LABEL[doc.type]} onClose={onClose}>
+    <Focus title={DOC_LABEL[doc.type]} onClose={onClose} pile={pile}>
       <div className="detail">
-        <div className="detail-card"><IdFace doc={doc} reveal={reveal} /></div>
+        <div className="detail-card"><div className="focus-card"><IdFace doc={doc} reveal={reveal} /></div></div>
 
         <div className="action-bar" role="toolbar" aria-label="ID actions">
           <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={24} /></button>
@@ -129,7 +138,8 @@ function DocDetail({ doc, onEdit, onDelete, onClose }: { doc: IdDoc; onEdit: () 
           <button className="btn icon lightbox-close" aria-label="Close"><Icon name="x" /></button>
         </div>
       )}
-    </Sheet>
+      {sharing && <DocShare doc={doc} onClose={() => setSharing(false)} />}
+    </Focus>
   );
 }
 

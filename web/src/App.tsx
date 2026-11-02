@@ -17,8 +17,8 @@ import { Editor } from "./components/Editor.tsx";
 import { Lock } from "./components/Lock.tsx";
 import { RecoverySheet } from "./components/Recovery.tsx";
 import { Settings } from "./components/Settings.tsx";
-import { BASE, eraseSealed, getPref, loadSealed, saveSealed, setPref, type SortBy, type ThemePref, type VaultData } from "./store.ts";
-import { Icon, ToastHost } from "./ui.tsx";
+import { eraseSealed, getPref, loadSealed, saveSealed, setPref, type ThemePref, type VaultData } from "./store.ts";
+import { glide, Icon, Menu, ToastHost } from "./ui.tsx";
 
 interface Session {
   vk: VaultKey;
@@ -340,28 +340,14 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query); // typing stays instant; the list catches up
   const [filter, setFilter] = useState("all");
-  const [sortBy, setSortBy] = useState<SortBy>(() => getPref<SortBy>("sort", "recent"));
+  const [searching, setSearching] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<Card | "new" | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [bioDismissed, setBioDismissed] = useState(false);
-  const [tab, setTabState] = useState<"cards" | "ids">(() => (getPref<string>("tab", "cards") === "ids" ? "ids" : "cards"));
-  const setTab = (t: "cards" | "ids") => { setTabState(t); setPref("tab", t); };
   const [addingDoc, setAddingDoc] = useState(false);
   const doneAddingDoc = useCallback(() => setAddingDoc(false), []);
-  const add = () => (tab === "cards" ? setEditing("new") : setAddingDoc(true));
-  const title = tab === "cards" ? "Your cards" : "Your IDs";
-
-  // once the big title scrolls under the bar, the bar shows it instead
-  const titleRef = useRef<HTMLHeadingElement>(null);
-  const [scrolled, setScrolled] = useState(false);
-  useEffect(() => {
-    const el = titleRef.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([e]) => setScrolled(!e?.isIntersecting), { rootMargin: "-64px 0px 0px 0px" });
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
+  const dark = document.documentElement.dataset.theme === "dark";
 
   const categories = useMemo(() => [...new Set(cards.map((c) => c.category))].sort(), [cards]);
   const networks = useMemo(() => [...new Set(cards.map((c) => c.network))], [cards]);
@@ -387,57 +373,55 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
                 : c.network === value)
       .filter((c) => !q || [c.bank, c.nickname, c.holder, c.category, NETWORK_LABEL[c.network], c.kind].some((s) => s.toLowerCase().includes(q))
         || (qDigits.length >= 2 && qDigits.length <= 4 && last4(c.number).includes(qDigits)))
-      .sort((a, b) =>
-        Number(b.favorite) - Number(a.favorite)
-        || (sortBy === "bank" ? a.bank.localeCompare(b.bank)
-          : sortBy === "expiry" ? expiryKey(a.expiry) - expiryKey(b.expiry)
-            : b.updatedAt - a.updatedAt));
-  }, [cards, deferredQuery, filter, sortBy]);
+      .sort((a, b) => Number(b.favorite) - Number(a.favorite) || b.updatedAt - a.updatedAt);
+  }, [cards, deferredQuery, filter]);
 
   const open = cards.find((c) => c.id === openId) ?? null;
+  const openCard = useCallback((id: string) => glide(id, () => setOpenId(id), true), []);
+  const closeCard = useCallback(() => { if (openId) glide(openId, () => setOpenId(null), false); }, [openId]);
   const upsert = async (card: Card) => {
     await save(cards.some((c) => c.id === card.id) ? cards.map((c) => (c.id === card.id ? card : c)) : [...cards, card]);
   };
+  const stopSearch = () => { setSearching(false); setQuery(""); setFilter("all"); };
 
   return (
     <>
-      <header className={`topbar${scrolled ? " scrolled" : ""}`}>
-        <div className="topbar-inner">
-          <span className="wordmark">
-            <img className="brand" src={`${BASE}/icons/icon.svg`} alt="" width={30} height={30} />
-            <span className="wordmark-text">Wallet</span>
-          </span>
-          <span className="topbar-title" aria-hidden="true">{title}</span>
-          <div className="topbar-actions">
-            <button className="btn icon ghost" onClick={() => settings.onTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark")} aria-label="Toggle theme">
-              <Icon name={document.documentElement.dataset.theme === "dark" ? "sun" : "moon"} />
-            </button>
-            <button className="btn icon ghost" onClick={() => setShowSettings(true)} aria-label="Settings"><Icon name="settings" /></button>
-            <button className="btn icon ghost" onClick={onLock} aria-label="Lock"><Icon name="lock" /></button>
+      <div className="status-scrim" aria-hidden="true" />
+      <main className="page wallet">
+        {searching ? (
+          <div className="searchbar">
+            <div className="search-row">
+              <div className="search">
+                <Icon name="search" />
+                <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Bank, name, last four…"
+                  aria-label="Search cards and IDs" autoComplete="off" autoFocus />
+              </div>
+              <button type="button" className="pill-btn" onClick={stopSearch}>Cancel</button>
+            </div>
+            {cards.length > 0 && (
+              <div className="chips" role="tablist" aria-label="Filter cards">
+                {filters.map((f) => (
+                  <button key={f.id} role="tab" aria-selected={filter === f.id} className={`chip-btn${filter === f.id ? " on" : ""}`} onClick={() => setFilter(f.id)}>{f.label}</button>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      </header>
-
-      <main className="page">
-        <section className="hero">
-          <span className="eyebrow">
-            {tab === "cards" ? `${cards.length} card${cards.length === 1 ? "" : "s"}` : `${docs.length} ID${docs.length === 1 ? "" : "s"}`} · encrypted on this device
-          </span>
-          <div className="hero-row">
-            <h1 ref={titleRef}>{title}</h1>
-            <button className="btn primary hero-add" onClick={add}>
-              <Icon name="plus" /> {tab === "cards" ? "Add card" : "Add ID"}
-            </button>
-          </div>
-          <div className="tabs" role="tablist" aria-label="Wallet sections" data-active={tab}>
-            <button role="tab" aria-selected={tab === "cards"} className={tab === "cards" ? "on" : ""} onClick={() => setTab("cards")}>
-              <Icon name="card" size={17} /> Cards <span className="count">{cards.length}</span>
-            </button>
-            <button role="tab" aria-selected={tab === "ids"} className={tab === "ids" ? "on" : ""} onClick={() => setTab("ids")}>
-              <Icon name="idcard" size={17} /> IDs <span className="count">{docs.length}</span>
-            </button>
-          </div>
-        </section>
+        ) : (
+          <header className="wallet-head">
+            <h1>Wallet</h1>
+            <div className="head-actions">
+              <Menu label="Add" icon="plus" items={[
+                { label: "Add card", icon: "card", onClick: () => setEditing("new") },
+                { label: "Add ID", icon: "idcard", onClick: () => setAddingDoc(true) },
+              ]} />
+              <Menu label="More" icon="more" items={[
+                { label: "Settings", icon: "settings", onClick: () => setShowSettings(true) },
+                { label: dark ? "Light mode" : "Dark mode", icon: dark ? "sun" : "moon", onClick: () => settings.onTheme(dark ? "light" : "dark") },
+                { label: "Lock", icon: "lock", onClick: onLock },
+              ]} />
+            </div>
+          </header>
+        )}
 
         {settings.bio.offer && !bioDismissed && (
           <div className="banner bio-offer">
@@ -466,58 +450,41 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
           </div>
         )}
 
-        {tab === "ids" ? <DocsView docs={docs} save={saveDocs} adding={addingDoc} onAdded={doneAddingDoc} /> : <>
-        {cards.length > 0 && (
-          <div className="toolbar">
-            <div className="search">
-              <Icon name="search" />
-              <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search bank, name, last four…" aria-label="Search cards" autoComplete="off" />
-            </div>
-            <div className="filter-row">
-              <div className="chips" role="tablist" aria-label="Filter cards">
-                {filters.map((f) => (
-                  <button key={f.id} role="tab" aria-selected={filter === f.id} className={`chip-btn${filter === f.id ? " on" : ""}`} onClick={() => setFilter(f.id)}>{f.label}</button>
-                ))}
-              </div>
-              <select className="sort" value={sortBy} onChange={(e) => { setSortBy(e.target.value as SortBy); setPref("sort", e.target.value); }} aria-label="Sort cards">
-                <option value="recent">Recent</option>
-                <option value="bank">Bank</option>
-                <option value="expiry">Expiry</option>
-              </select>
-            </div>
-          </div>
-        )}
-
         {cards.length === 0 ? (
-          <div className="empty">
-            <div className="empty-card"><CardFace card={{ bank: "Your first card", nickname: "Wallet", kind: "credit", network: "visa", number: "", expiry: "", cvv: "", colors: ["#6f86ff", "#9a73ff"] }} /></div>
-            <h2>No cards yet</h2>
-            <p className="muted">Add a card, then snap a photo of it so it looks like the real one. Everything stays encrypted on this device.</p>
-            <button className="btn primary" onClick={() => setEditing("new")}><Icon name="plus" /> Add your first card</button>
-          </div>
+          !searching && (
+            <div className="empty">
+              <div className="empty-card"><CardFace card={{ bank: "Your first card", nickname: "Wallet", kind: "credit", network: "visa", number: "", expiry: "", cvv: "", colors: ["#0a84ff", "#5e5ce6"] }} /></div>
+              <h2>No cards yet</h2>
+              <p className="muted">Add a card, then snap a photo of it so it looks like the real one. Everything stays encrypted on this device.</p>
+              <button className="btn primary" onClick={() => setEditing("new")}><Icon name="plus" /> Add your first card</button>
+            </div>
+          )
         ) : shown.length === 0 ? (
           <p className="muted center pad">No cards match.</p>
         ) : (
-          <ul className="card-grid">
-            {shown.map((c, i) => <CardTile key={c.id} card={c} index={i} onOpen={setOpenId} />)}
+          <ul className="stack" aria-label="Cards">
+            {shown.map((c, i) => <CardTile key={c.id} card={c} index={i} onOpen={openCard} />)}
           </ul>
         )}
-        </>}
+
+        <DocsView docs={docs} save={saveDocs} adding={addingDoc} onAdded={doneAddingDoc} query={filter === "all" ? deferredQuery : null} />
+
+        {!searching && (cards.length > 0 || docs.length > 0) && (
+          <p className="wallet-foot">
+            {cards.length} card{cards.length === 1 ? "" : "s"}{docs.length ? ` · ${docs.length} ID${docs.length === 1 ? "" : "s"}` : ""} · encrypted on this device
+          </p>
+        )}
       </main>
 
-      {/* phones: sections and the add button within thumb reach */}
-      <nav className="tabbar" aria-label="Wallet sections">
-        <button className={tab === "cards" ? "on" : ""} aria-current={tab === "cards" ? "page" : undefined} onClick={() => setTab("cards")}>
-          <Icon name="card" size={22} /><span>Cards</span>
-        </button>
-        <button className="tabbar-add" onClick={add} aria-label={tab === "cards" ? "Add card" : "Add ID"}><Icon name="plus" size={24} /></button>
-        <button className={tab === "ids" ? "on" : ""} aria-current={tab === "ids" ? "page" : undefined} onClick={() => setTab("ids")}>
-          <Icon name="idcard" size={22} /><span>IDs</span>
-        </button>
-      </nav>
+      {!searching && (cards.length > 0 || docs.length > 0) && (
+        <button type="button" className="search-fab" onClick={() => setSearching(true)} aria-label="Search"><Icon name="search" size={24} /></button>
+      )}
 
       {open && (
-        <Detail card={open} onClose={() => setOpenId(null)}
+        <Detail card={open} onClose={closeCard}
+          pile={shown.filter((c) => c.id !== open.id).slice(0, 4).map((c, k) => (
+            <div key={c.id} className="pile-card" style={{ "--k": k } as React.CSSProperties}><CardFace card={c} /></div>
+          ))}
           onEdit={() => { setEditing(open); setOpenId(null); }}
           onToggleFavorite={() => upsert({ ...open, favorite: !open.favorite, updatedAt: Date.now() })}
           onDelete={async () => { await save(cards.filter((c) => c.id !== open.id)); setOpenId(null); }} />
@@ -531,27 +498,21 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   );
 }
 
-// memoised so typing in search or opening a sheet does not re-render every card in a long list
+// memoised so typing in search or opening a card does not re-render every card in a long list
 const CardTile = React.memo(function CardTile({ card: c, index, onOpen }: { card: Card; index: number; onOpen: (id: string) => void }) {
   const exp = expiryState(c.expiry);
   const open = useCallback(() => onOpen(c.id), [onOpen, c.id]);
   return (
-    <li style={{ "--i": index } as React.CSSProperties}>
+    <li data-tile={c.id} style={{ "--i": index } as React.CSSProperties}>
       <CardFace card={c} onClick={open} label={`Open ${c.nickname || c.bank} ending ${last4(c.number)}`} />
-      {(c.favorite || exp !== "ok") && (
+      {exp !== "ok" && (
         <div className="card-badges">
-          {c.favorite && <span className="chip fav"><Icon name="star" size={11} /></span>}
-          {exp !== "ok" && <span className={`chip ${exp === "expired" ? "danger" : "warn"}`}>{exp === "expired" ? "Expired" : "Expires soon"}</span>}
+          <span className={`chip ${exp === "expired" ? "danger" : "warn"}`}>{exp === "expired" ? "Expired" : "Expires soon"}</span>
         </div>
       )}
     </li>
   );
 });
-
-const expiryKey = (e: string) => {
-  const [mm, yy] = e.split("/").map(Number);
-  return (yy ?? 0) * 12 + (mm ?? 0);
-};
 
 function useTheme(pref: ThemePref) {
   useEffect(() => {

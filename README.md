@@ -18,6 +18,7 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 
 ## Features
 
+* Apple Wallet layout: cards in a stack showing only their top strip; tap one and it glides to the top with its details, the rest drop into a pile at the bottom (View Transitions). + and ••• in the header, search button at the bottom right.
 * Add, edit, delete and favourite cards. Fields: bank, nickname, name on card, credit or debit, network
   (detected from the number: Visa, Mastercard, RuPay, Amex, Diners, Discover, Maestro, JCB), number, expiry, CVV and category.
 * Card look: every card gets drawn artwork (waves, honeycomb, rays, …) picked from its name, in its own colours, or
@@ -29,7 +30,7 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
   each category and each network. Sort by recent, bank or expiry. "Expires soon" (60 days) and "Expired" badges.
 * Light, dark or system theme. Phone-first layout, installable PWA, works offline.
 
-* IDs tab: Aadhaar, PAN and driving licence, each drawn as its own card (our own designs, not the government
+* IDs (a second stack under the cards): Aadhaar, PAN and driving licence, each drawn as its own card (our own designs, not the government
   artwork), with name, number (masked to the last four by default), date of birth and, for a licence, valid till.
   Attach front/back photos (resized to 1600 px JPEG) and/or the PDF (up to 10 MB). Share the files, or the details
   as text with the number masked unless switched on.

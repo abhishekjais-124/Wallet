@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from "react";
 import { expiryState, formatNumber, last4, maskNumber, NETWORK_LABEL, type Card } from "@shared/card.ts";
-import { Icon, Sheet, useAutoHide, useCopy, useToast } from "../ui.tsx";
+import { Focus, Icon, useAutoHide, useCopy, useToast } from "../ui.tsx";
 import { CardFace } from "./CardFace.tsx";
 import { ShareCard } from "./Share.tsx";
 
-export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
+export function Detail({ card, pile, onEdit, onToggleFavorite, onDelete, onClose }: {
   card: Card;
+  /** the other cards, shown as the pile at the bottom */
+  pile?: React.ReactNode;
   onEdit: () => void;
   onToggleFavorite: () => void;
   onDelete: () => void;
@@ -26,14 +28,12 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
   }, [confirmDelete]);
   const exp = expiryState(card.expiry);
 
-  if (sharing) return <ShareCard card={card} onClose={() => setSharing(false)} />;
-
   return (
-    <Sheet title={card.nickname || card.bank} onClose={onClose}>
+    <Focus title={card.nickname || card.bank} onClose={onClose} pile={pile}>
       <div className="detail">
         <div className="detail-card">
-          <CardFace card={card} flippable flipped={flipped} reveal={showNumber} revealCvv={showCvv} onClick={() => setFlipped((v) => !v)}
-            label={flipped ? "Show the front" : "Show the back"} />
+          <div className="focus-card"><CardFace card={card} flippable flipped={flipped} reveal={showNumber} revealCvv={showCvv} onClick={() => setFlipped((v) => !v)}
+            label={flipped ? "Show the front" : "Show the back"} /></div>
           <p className="fine center"><Icon name="flip" size={14} /> Tap the card to flip it</p>
         </div>
 
@@ -79,7 +79,8 @@ export function Detail({ card, onEdit, onToggleFavorite, onDelete, onClose }: {
         </div>
 
       </div>
-    </Sheet>
+      {sharing && <ShareCard card={card} onClose={() => setSharing(false)} />}
+    </Focus>
   );
 }
 

@@ -1,9 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 
 const PATHS = {
   search: "M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm10 2-4.35-4.35",
   plus: "M12 5v14M5 12h14",
   chevron: "m9 6 6 6-6 6",
+  more: "M5 13.2a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4ZM12 13.2a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4ZM19 13.2a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4Z",
   clock: "M12 7v5l3 2M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Z",
   cloud: "M7 18h10.5a4 4 0 0 0 .6-7.96A6 6 0 0 0 6.3 9.6 4.2 4.2 0 0 0 7 18Z",
   lock: "M7 11V7a5 5 0 0 1 10 0v4M5 11h14v10H5z",
@@ -44,6 +46,13 @@ export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   );
 }
 
+// open sheets and focused views; the page under them scrolls again only when the last one closes
+let overlays = 0;
+function lockPage(): () => void {
+  if (overlays++ === 0) document.body.classList.add("sheet-open");
+  return () => { if (--overlays === 0) document.body.classList.remove("sheet-open"); };
+}
+
 /** Bottom sheet on phones, centred dialog on wide screens. Escape and the backdrop close it. */
 export function Sheet({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -52,10 +61,10 @@ export function Sheet({ title, onClose, children, wide }: { title: string; onClo
     ref.current?.focus();
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
-    document.body.classList.add("sheet-open");
+    const unlock = lockPage();
     return () => {
       window.removeEventListener("keydown", onKey);
-      document.body.classList.remove("sheet-open");
+      unlock();
       prev?.focus?.();
     };
   }, [onClose]);
@@ -82,6 +91,80 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Apple Wallet's tapped-card view: the item fills the screen with its details below, and the others wait in a pile
+ * at the bottom; tapping the pile or Done goes back to the stack.
+ */
+export function Focus({ title, onClose, pile, children }: { title: string; onClose: () => void; pile?: React.ReactNode; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    ref.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    const unlock = lockPage();
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      unlock();
+      prev?.focus?.({ preventScroll: true });
+    };
+  }, [onClose]);
+  return (
+    <div className="focus" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
+      <header className="focus-head">
+        <button type="button" className="pill-btn" onClick={onClose}>Done</button>
+      </header>
+      <div className="focus-body">{children}</div>
+      {pile && <button type="button" className="pile" onClick={onClose} aria-label="Back to all">{pile}</button>}
+    </div>
+  );
+}
+
+/**
+ * Moves a stack tile into the focused view and back as a View Transition (Safari 18+, Chrome): the tapped card glides
+ * to the top instead of a sheet sliding up. The tile and the focused card share one transition name, set on the tile
+ * only while it is the visible one. Without the API (or with reduced motion) the view just switches.
+ */
+export function glide(tileId: string, update: () => void, opening: boolean): void {
+  const d = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
+  if (!d.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
+  const tile = () => document.querySelector<HTMLElement>(`[data-tile="${CSS.escape(tileId)}"]`);
+  const name = (on: boolean) => tile()?.style.setProperty("view-transition-name", on ? "focus-card" : "none");
+  if (opening) name(true);
+  d.startViewTransition(() => {
+    name(!opening);
+    flushSync(update);
+  }).finished.finally(() => name(false));
+}
+
+/** A round header button that opens a short list of actions, like the + and ••• buttons in Apple Wallet. */
+export function Menu({ label, icon, items }: { label: string; icon: IconName; items: { label: string; icon: IconName; onClick: () => void }[] }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+  return (
+    <div className="menu" ref={ref}>
+      <button type="button" className="round-btn" aria-label={label} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
+        <Icon name={icon} size={20} />
+      </button>
+      {open && (
+        <div className="menu-pop" role="menu">
+          {items.map((it) => (
+            <button key={it.label} type="button" role="menuitem" onClick={() => { setOpen(false); it.onClick(); }}>
+              <span>{it.label}</span><Icon name={it.icon} size={18} />
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
