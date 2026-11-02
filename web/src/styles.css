@@ -54,6 +54,8 @@
   --tap: 44px;
   --ease: 180ms cubic-bezier(0.2, 0.7, 0.2, 1);
   --spring: 520ms cubic-bezier(0.2, 0.9, 0.25, 1.05);
+  --bounce: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --glide: cubic-bezier(0.2, 0.9, 0.25, 1);
 }
 
 * { box-sizing: border-box; }
@@ -266,7 +268,7 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
   background: var(--surface); border-radius: 26px 26px 0 0; box-shadow: var(--sheet-shadow); border: 1px solid var(--border);
   padding-bottom: env(safe-area-inset-bottom); animation: slide-up 420ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
 }
-@keyframes slide-up { from { transform: translateY(40px); opacity: 0; } }
+@keyframes slide-up { from { transform: translateY(60px); opacity: 0; } }
 @media (min-width: 720px) {
   .sheet-backdrop { align-items: center; padding: 24px; }
   .sheet { max-width: 520px; border-radius: 26px; animation-name: pop; }
@@ -603,3 +605,89 @@ button.cardface:active .cf-inner { translate: 0 0; scale: 0.99; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; }
 
 .toast-wrap { bottom: calc(92px + env(safe-area-inset-bottom)); }
+
+/* ---- premium polish: springs, depth, materials ---- */
+/* glass buttons, pressed with a spring */
+.round-btn, .pill-btn, .search-fab {
+  background: color-mix(in srgb, var(--surface-2) 78%, transparent); border: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(18px) saturate(170%); backdrop-filter: blur(18px) saturate(170%);
+  transition: transform 360ms var(--bounce), background var(--ease);
+}
+.round-btn:active, .pill-btn:active, .search-fab:active { transform: scale(0.88); }
+.round-btn:active { background: var(--surface-3); }
+.btn { transition: background var(--ease), border-color var(--ease), transform 320ms var(--bounce), opacity var(--ease), color var(--ease); }
+.btn:active { transform: scale(0.95); }
+.action { transition: transform 320ms var(--bounce), color var(--ease); }
+.action:active { transform: scale(0.82); }
+.switch:active::after { width: 32px; }
+.switch.on:active::after { transform: translateX(15px); }
+.menu-pop { animation-duration: 260ms; animation-timing-function: var(--bounce); }
+
+/* the stack: every strip sits on the card above it with its own shadow and a hairline of light */
+.stack .cardface, .stack .idface {
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.07), 0 -16px 32px -18px rgba(0, 0, 0, 0.8), 0 -2px 6px -2px rgba(0, 0, 0, 0.35);
+  transition: transform 420ms var(--bounce), box-shadow 420ms var(--bounce);
+}
+:root[data-theme="light"] .stack .cardface, :root[data-theme="light"] .stack .idface {
+  box-shadow: 0 0 0 0.5px rgba(16, 20, 40, 0.08), 0 -14px 28px -18px rgba(16, 20, 40, 0.5), 0 -2px 6px -3px rgba(16, 20, 40, 0.2);
+}
+.stack .cardface:active, .stack .idface:active { transform: translateY(-10px) scale(1.012); box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.07), 0 -22px 44px -16px rgba(0, 0, 0, 0.85), 0 -2px 6px -2px rgba(0, 0, 0, 0.35); }
+.stack > li { animation: stack-in 640ms var(--glide) both; animation-delay: calc(min(var(--i), 14) * 34ms); }
+@keyframes stack-in { from { opacity: 0; transform: translateY(28px) scale(0.985); } }
+.wallet-head { position: relative; z-index: 30; animation: fade-down 480ms var(--glide) both; }
+@keyframes fade-down { from { opacity: 0; transform: translateY(-8px); } }
+.searchbar { animation: fade-down 320ms var(--glide) both; }
+
+/* the focused card: a gloss sweeps across as it arrives, details rise under it, the pile springs up */
+.focus-card { position: relative; }
+.focus-card::after {
+  content: ""; position: absolute; inset: 0; z-index: 2; border-radius: 22px; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.22) 48%, rgba(255, 255, 255, 0.05) 52%, transparent 70%) no-repeat;
+  background-size: 280% 100%; animation: sheen 1100ms cubic-bezier(0.3, 0.6, 0.2, 1) 260ms both;
+}
+@keyframes sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+.focus .detail > :not(.detail-card) { animation: rise 560ms var(--glide) both; }
+.focus .action-bar { animation-delay: 80ms; }
+.focus .rows, .focus .doc-files { animation-delay: 140ms; }
+.pile { animation: pile-in 620ms var(--bounce) 120ms both; }
+@keyframes pile-in { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
+.focus-head { animation: fade-down 360ms var(--glide) both; }
+
+/* lock screen: a breathing glow, keys that press in, dots that pop as they fill */
+.lock-card { animation: lock-in 640ms var(--glide) both; }
+@keyframes lock-in { from { opacity: 0; transform: translateY(16px) scale(0.98); } }
+.lock-mark { animation: breathe 3.6s ease-in-out infinite; }
+@keyframes breathe { 50% { box-shadow: 0 18px 46px -10px rgba(10, 132, 255, 0.75); transform: translateY(-2px); } }
+.pin-key { transition: transform 260ms var(--bounce), background 120ms ease; }
+.pin-key:active { transform: scale(0.88); }
+.pin-dots span { transition: background 120ms ease, border-color 120ms ease; }
+.pin-dots span.on { animation: dot-in 300ms var(--bounce) both; }
+@keyframes dot-in { from { transform: scale(0.5); } 60% { transform: scale(1.3); } to { transform: scale(1.08); } }
+.bio-btn { transition: transform 320ms var(--bounce), filter var(--ease); }
+.bio-btn:active { transform: scale(0.96); }
+
+/* sheets: a spring in, a slide out */
+.sheet { animation: slide-up 520ms var(--glide) both; view-transition-name: sheet; }
+@media (min-width: 720px) { .sheet { animation-name: pop; animation-duration: 360ms; } }
+.toast { animation-timing-function: var(--bounce); }
+
+/* ---- view transitions (styles for the kinds ui.tsx sets on <html data-vt>) ---- */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: var(--glide); }
+:root[data-vt="unlock"]::view-transition-old(root) { animation: 320ms cubic-bezier(0.4, 0, 0.6, 1) both vt-lock-out; }
+:root[data-vt="unlock"]::view-transition-new(root) { animation: 520ms var(--glide) both vt-wallet-in; }
+@keyframes vt-lock-out { to { opacity: 0; transform: scale(1.06); filter: blur(8px); } }
+@keyframes vt-wallet-in { from { opacity: 0; transform: translateY(24px) scale(0.98); } }
+:root[data-vt="lock"]::view-transition-old(root) { animation: 300ms cubic-bezier(0.4, 0, 0.6, 1) both vt-wallet-out; }
+:root[data-vt="lock"]::view-transition-new(root) { animation: 420ms var(--glide) both vt-fade-in; }
+@keyframes vt-wallet-out { to { opacity: 0; transform: scale(0.96); filter: blur(6px); } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+:root[data-vt="sheet"]::view-transition-old(sheet) { animation: 300ms cubic-bezier(0.4, 0, 0.8, 1) both vt-sheet-out; }
+:root[data-vt="sheet"]::view-transition-new(sheet) { animation: none; }
+@keyframes vt-sheet-out { to { opacity: 0; transform: translateY(40px) scale(0.98); } }
+::view-transition-old(focus-card), ::view-transition-new(focus-card) { animation-duration: 460ms; animation-timing-function: var(--glide); }
+::view-transition-group(focus-card) { animation-duration: 460ms; animation-timing-function: var(--glide); }
+
+/* nothing moves for people who asked for that */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+}

@@ -46,6 +46,41 @@ export function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   );
 }
 
+/** A tap on the Taptic Engine when inside the Wallet iPhone app; nothing elsewhere. */
+export type Haptic = "light" | "medium" | "selection" | "success" | "error";
+const taptic = (window as { webkit?: { messageHandlers?: { walletHaptic?: { postMessage: (m: { op: string }) => Promise<unknown> } } } }).webkit?.messageHandlers?.walletHaptic;
+export function haptic(kind: Haptic = "light"): void {
+  taptic?.postMessage({ op: kind }).catch(() => {});
+}
+
+const reduceMotion = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+type VTDocument = Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
+
+/**
+ * The browser calls a view transition's callback on its next frame. A page that is not being drawn (backgrounded,
+ * a hidden pane) has no next frame, so the update is applied from a timer instead and the callback becomes a no-op.
+ */
+function viewTransition(update: () => void, after: () => void): void {
+  const d = document as VTDocument;
+  let done = false;
+  const run = () => { if (!done) { done = true; update(); } };
+  const fallback = setTimeout(run, 350);
+  d.startViewTransition!(() => { clearTimeout(fallback); flushSync(run); }).finished.finally(after);
+}
+
+/**
+ * Runs a state change as a View Transition (Safari 18+, Chrome) so the screens cross-fade or, with `kind` set on
+ * <html data-vt>, play the animation styles.css defines for it. Without the API the change just happens.
+ */
+export function transition(update: () => void, kind?: string): void {
+  const d = document as VTDocument;
+  if (!d.startViewTransition || reduceMotion() || document.hidden) return update();
+  if (kind) document.documentElement.dataset.vt = kind;
+  viewTransition(update, () => {
+    if (document.documentElement.dataset.vt === kind) delete document.documentElement.dataset.vt;
+  });
+}
+
 // open sheets and focused views; the page under them scrolls again only when the last one closes
 let overlays = 0;
 function lockPage(): () => void {
@@ -56,10 +91,12 @@ function lockPage(): () => void {
 /** Bottom sheet on phones, centred dialog on wide screens. Escape and the backdrop close it. */
 export function Sheet({ title, onClose, children, wide }: { title: string; onClose: () => void; children: React.ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  // closing is a view transition, so the sheet slides away instead of vanishing
+  const close = useCallback(() => transition(onClose, "sheet"), [onClose]);
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
     window.addEventListener("keydown", onKey);
     const unlock = lockPage();
     return () => {
@@ -67,13 +104,13 @@ export function Sheet({ title, onClose, children, wide }: { title: string; onClo
       unlock();
       prev?.focus?.();
     };
-  }, [onClose]);
+  }, [close]);
   return (
-    <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div className={`sheet${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
         <header className="sheet-head">
           <h2>{title}</h2>
-          <button className="btn icon ghost" onClick={onClose} aria-label="Close"><Icon name="x" /></button>
+          <button className="btn icon ghost" onClick={close} aria-label="Close"><Icon name="x" /></button>
         </header>
         <div className="sheet-body">{children}</div>
       </div>
@@ -87,7 +124,7 @@ export function Segmented<T extends string>({ value, options, onChange, label }:
   return (
     <div className="segmented" role="radiogroup" aria-label={label}>
       {options.map((o) => (
-        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? "on" : ""} onClick={() => onChange(o.value)}>
+        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? "on" : ""} onClick={() => { if (o.value !== value) { haptic("selection"); onChange(o.value); } }}>
           {o.label}
         </button>
       ))}
@@ -116,10 +153,10 @@ export function Focus({ title, onClose, pile, children }: { title: string; onClo
   return (
     <div className="focus" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
       <header className="focus-head">
-        <button type="button" className="pill-btn" onClick={onClose}>Done</button>
+        <button type="button" className="pill-btn" onClick={() => { haptic(); onClose(); }}>Done</button>
       </header>
       <div className="focus-body">{children}</div>
-      {pile && <button type="button" className="pile" onClick={onClose} aria-label="Back to all">{pile}</button>}
+      {pile && <button type="button" className="pile" onClick={() => { haptic(); onClose(); }} aria-label="Back to all">{pile}</button>}
     </div>
   );
 }
@@ -130,15 +167,13 @@ export function Focus({ title, onClose, pile, children }: { title: string; onClo
  * only while it is the visible one. Without the API (or with reduced motion) the view just switches.
  */
 export function glide(tileId: string, update: () => void, opening: boolean): void {
-  const d = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
-  if (!d.startViewTransition || matchMedia("(prefers-reduced-motion: reduce)").matches) return update();
+  const d = document as VTDocument;
+  if (!d.startViewTransition || reduceMotion()) return update();
   const tile = () => document.querySelector<HTMLElement>(`[data-tile="${CSS.escape(tileId)}"]`);
   const name = (on: boolean) => tile()?.style.setProperty("view-transition-name", on ? "focus-card" : "none");
   if (opening) name(true);
-  d.startViewTransition(() => {
-    name(!opening);
-    flushSync(update);
-  }).finished.finally(() => name(false));
+  document.documentElement.dataset.vt = opening ? "open" : "close";
+  viewTransition(() => { name(!opening); update(); }, () => { name(false); delete document.documentElement.dataset.vt; });
 }
 
 /** A round header button that opens a short list of actions, like the + and ••• buttons in Apple Wallet. */
@@ -153,13 +188,13 @@ export function Menu({ label, icon, items }: { label: string; icon: IconName; it
   }, [open]);
   return (
     <div className="menu" ref={ref}>
-      <button type="button" className="round-btn" aria-label={label} aria-expanded={open} aria-haspopup="menu" onClick={() => setOpen(!open)}>
+      <button type="button" className="round-btn" aria-label={label} aria-expanded={open} aria-haspopup="menu" onClick={() => { haptic(); setOpen(!open); }}>
         <Icon name={icon} size={20} />
       </button>
       {open && (
         <div className="menu-pop" role="menu">
           {items.map((it) => (
-            <button key={it.label} type="button" role="menuitem" onClick={() => { setOpen(false); it.onClick(); }}>
+            <button key={it.label} type="button" role="menuitem" onClick={() => { haptic("selection"); setOpen(false); it.onClick(); }}>
               <span>{it.label}</span><Icon name={it.icon} size={18} />
             </button>
           ))}
@@ -203,6 +238,7 @@ export function useCopy() {
       toast("Copy blocked by the browser");
       return;
     }
+    haptic("success");
     if (!secret) return toast(`${label} copied`);
     const mine = ++lastSecret;
     toast(`${label} copied · clears in 30 s`);

@@ -29,6 +29,7 @@ struct WalletWebView: UIViewRepresentable {
     config.websiteDataStore = .default()
     config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletBio")
     config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletGoogle")
+    config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "walletHaptic")
 
     let web = WKWebView(frame: .zero, configuration: config)
     web.isOpaque = false
@@ -47,13 +48,28 @@ struct WalletWebView: UIViewRepresentable {
     ASWebAuthenticationPresentationContextProviding {
     private var downloaded: URL?
 
-    // ---- bridges: window.webkit.messageHandlers.walletBio / walletGoogle .postMessage({ op, ... }) ----
+    // ---- bridges: window.webkit.messageHandlers.walletBio / walletGoogle / walletHaptic .postMessage({ op, ... }) ----
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) async -> (Any?, String?) {
       // only Wallet's own page may ask for the PIN or a Google token
       guard message.frameInfo.isMainFrame, message.frameInfo.securityOrigin.host == home.host,
             let body = message.body as? [String: Any], let op = body["op"] as? String else { return (nil, "Not allowed.") }
-      return message.name == "walletGoogle" ? await google(op, hint: body["hint"] as? String) : await bio(op, body)
+      switch message.name {
+      case "walletGoogle": return await google(op, hint: body["hint"] as? String)
+      case "walletHaptic": haptic(op); return (true, nil)
+      default: return await bio(op, body)
+      }
+    }
+
+    // the Taptic Engine, so taps in the page feel like taps in any other app
+    private func haptic(_ op: String) {
+      switch op {
+      case "selection": UISelectionFeedbackGenerator().selectionChanged()
+      case "medium": UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+      case "success": UINotificationFeedbackGenerator().notificationOccurred(.success)
+      case "error": UINotificationFeedbackGenerator().notificationOccurred(.error)
+      default: UIImpactFeedbackGenerator(style: .light).impactOccurred()
+      }
     }
 
     private func google(_ op: String, hint: String?) async -> (Any?, String?) {

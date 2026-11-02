@@ -6,7 +6,7 @@ import {
 import { forgetFile, storeFile } from "../blobs.ts";
 import { openFile, pdfFile, photoFile, sizeLabel, toFile, useFileUrl } from "../files.ts";
 import { newId } from "../store.ts";
-import { Focus, glide, Icon, Segmented, Sheet, useAutoHide, useCopy, useToast } from "../ui.tsx";
+import { Focus, glide, haptic, Icon, Segmented, Sheet, useAutoHide, useCopy, useToast } from "../ui.tsx";
 import { IdFace } from "./IdFace.tsx";
 
 /**
@@ -37,7 +37,7 @@ export function DocsView({ docs, save, adding, onAdded, query }: {
     .filter((d) => !q || [d.name, DOC_LABEL[d.type]].some((x) => x.toLowerCase().includes(q)) || d.number.toLowerCase().endsWith(q))
     .sort((a, b) => order[a.type] - order[b.type] || a.name.localeCompare(b.name));
   const open = docs.find((d) => d.id === openId) ?? null;
-  const openDoc = (id: string) => glide(id, () => setOpenId(id), true);
+  const openDoc = (id: string) => { haptic(); glide(id, () => setOpenId(id), true); };
   const closeDoc = () => { if (openId) glide(openId, () => setOpenId(null), false); };
   const upsert = async (draft: IdDoc) => {
     const doc = { ...draft, files: await Promise.all(draft.files.map(storeFile)) };
@@ -100,7 +100,7 @@ function DocDetail({ doc, pile, onEdit, onDelete, onClose }: {
           <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={24} /></button>
           <button className="action is-edit" onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={24} /></button>
           <button className={`action is-danger${confirmDelete ? " armed" : ""}`} aria-label={confirmDelete ? "Tap again to delete" : "Delete"} title="Delete"
-            onClick={() => { if (confirmDelete) onDelete(); else { setConfirmDelete(true); toast("Tap again to delete"); } }}>
+            onClick={() => { if (confirmDelete) onDelete(); else { haptic("medium"); setConfirmDelete(true); toast("Tap again to delete"); } }}>
             <Icon name={confirmDelete ? "check" : "trash"} size={24} />
           </button>
         </div>

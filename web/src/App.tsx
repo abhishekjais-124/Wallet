@@ -18,7 +18,7 @@ import { Lock } from "./components/Lock.tsx";
 import { RecoverySheet } from "./components/Recovery.tsx";
 import { Settings } from "./components/Settings.tsx";
 import { eraseSealed, getPref, loadSealed, saveSealed, setPref, type ThemePref, type VaultData } from "./store.ts";
-import { glide, Icon, Menu, ToastHost } from "./ui.tsx";
+import { glide, haptic, Icon, Menu, ToastHost, transition } from "./ui.tsx";
 
 interface Session {
   vk: VaultKey;
@@ -49,7 +49,7 @@ export function App() {
   const [lockMinutes, setLockMinutes] = useState(() => getPref<number>("lockMinutes", 5));
   useTheme(theme);
 
-  const lock = useCallback(() => { setSession(null); setKnownPin(null); }, []);
+  const lock = useCallback(() => transition(() => { setSession(null); setKnownPin(null); }, "lock"), []);
   useAutoLock(!!session, lockMinutes, lock);
 
   const [knownPin, setKnownPin] = useState<string | null>(null);
@@ -267,7 +267,8 @@ export function App() {
           // an older vault opened with nine digits gets a recovery key (a letters passphrase does when it switches to a PIN)
           if (!vk.raw && isPin(secret)) void upgrade(vk, data, secret);
           else if (remote) void merge(remote, vk, data.cards, docs, deleted);
-          else setSession({ vk, cards: data.cards, docs, deleted });
+          else transition(() => setSession({ vk, cards: data.cards, docs, deleted }), "unlock");
+          haptic("success");
         }} />
       ) : (
         <WalletView
@@ -501,7 +502,7 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
 // memoised so typing in search or opening a card does not re-render every card in a long list
 const CardTile = React.memo(function CardTile({ card: c, index, onOpen }: { card: Card; index: number; onOpen: (id: string) => void }) {
   const exp = expiryState(c.expiry);
-  const open = useCallback(() => onOpen(c.id), [onOpen, c.id]);
+  const open = useCallback(() => { haptic(); onOpen(c.id); }, [onOpen, c.id]);
   return (
     <li data-tile={c.id} style={{ "--i": index } as React.CSSProperties}>
       <CardFace card={c} onClick={open} label={`Open ${c.nickname || c.bank} ending ${last4(c.number)}`} />

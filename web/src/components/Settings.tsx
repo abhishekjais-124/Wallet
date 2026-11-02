@@ -6,7 +6,7 @@ import {
 } from "@shared/vault.ts";
 import { exportBlobs, importBlobs } from "../blobs.ts";
 import { downloadJson, readSealedFile, vaultOnly, type BackupFile, type ThemePref, type VaultData } from "../store.ts";
-import { Icon, Segmented, Sheet, useToast } from "../ui.tsx";
+import { haptic, Icon, Segmented, Sheet, useToast } from "../ui.tsx";
 import type { SyncState } from "../App.tsx";
 import { nativeBio } from "../bio.ts";
 import { bioIcon, BioSetup } from "./BioSetup.tsx";
@@ -330,7 +330,7 @@ function Fold({ icon, title, hint, danger, children }: { icon: IconName; title: 
 }
 
 function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: () => void }) {
-  return <button type="button" role="switch" aria-checked={on} aria-label={label} className={`switch${on ? " on" : ""}`} onClick={onChange} />;
+  return <button type="button" role="switch" aria-checked={on} aria-label={label} className={`switch${on ? " on" : ""}`} onClick={() => { haptic("selection"); onChange(); }} />;
 }
 
 export function GoogleMark() {

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { expiryState, formatNumber, last4, maskNumber, NETWORK_LABEL, type Card } from "@shared/card.ts";
-import { Focus, Icon, useAutoHide, useCopy, useToast } from "../ui.tsx";
+import { Focus, haptic, Icon, useAutoHide, useCopy, useToast } from "../ui.tsx";
 import { CardFace } from "./CardFace.tsx";
 import { ShareCard } from "./Share.tsx";
 
@@ -38,14 +38,14 @@ export function Detail({ card, pile, onEdit, onToggleFavorite, onDelete, onClose
         </div>
 
         <div className="action-bar" role="toolbar" aria-label="Card actions">
-          <button className={`action is-fav${card.favorite ? " on" : ""}`} onClick={onToggleFavorite} aria-pressed={card.favorite}
+          <button className={`action is-fav${card.favorite ? " on" : ""}`} onClick={() => { haptic("selection"); onToggleFavorite(); }} aria-pressed={card.favorite}
             aria-label={card.favorite ? "Remove from favourites" : "Add to favourites"} title={card.favorite ? "Favourite" : "Add to favourites"}>
             <Icon name="star" size={24} />
           </button>
           <button className="action is-share" onClick={() => setSharing(true)} aria-label="Share" title="Share"><Icon name="share" size={24} /></button>
           <button className="action is-edit" onClick={onEdit} aria-label="Edit" title="Edit"><Icon name="edit" size={24} /></button>
           <button className={`action is-danger${confirmDelete ? " armed" : ""}`} aria-label={confirmDelete ? "Tap again to delete" : "Delete"} title="Delete"
-            onClick={() => { if (confirmDelete) onDelete(); else { setConfirmDelete(true); toast("Tap again to delete"); } }}>
+            onClick={() => { if (confirmDelete) onDelete(); else { haptic("medium"); setConfirmDelete(true); toast("Tap again to delete"); } }}>
             <Icon name={confirmDelete ? "check" : "trash"} size={24} />
           </button>
         </div>

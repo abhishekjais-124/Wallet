@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Icon } from "../ui.tsx";
+import { haptic, Icon } from "../ui.tsx";
 
 export const PIN_LENGTH = 9;
 
@@ -19,12 +19,13 @@ export function PinPad({ onComplete, busy }: { onComplete: (pin: string) => Prom
 
   const press = (d: string) => {
     if (busy || pinRef.current.length >= PIN_LENGTH) return;
+    haptic("selection");
     const next = pinRef.current + d;
     setPin(next);
     if (next.length < PIN_LENGTH) return;
     onComplete(next).then((err) => {
       if (err === null) return;
-      if (err) setShake((n) => n + 1); // "" means "go on to the next step": clear without shaking
+      if (err) { haptic("error"); setShake((n) => n + 1); } // "" means "go on to the next step": clear without shaking
       setPin("");
     });
   };
