@@ -558,17 +558,22 @@ body:has(.wallet) { overflow: hidden; }
 .menu-pop button + button { border-top: 1px solid var(--border); }
 .menu-pop button:active { background: var(--surface-2); }
 
-/* the spotlight scroller: strips, and the one on the spotline open (spotlight.ts sets .active / .after and --grow) */
+/* the spotlight scroller: strips, and the one on the spotline open (spotlight.ts moves the tiles and sets .active) */
 .spot {
-  --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: calc(var(--strip) + 6px); --grow: 0px;
+  --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: calc(var(--strip) + 6px);
   position: relative; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   padding: var(--spot-top) 0 calc(var(--full) + 90px + env(safe-area-inset-bottom)); scrollbar-width: none;
+  /* the platform settles on a card when a scroll ends, with its own momentum */
+  scroll-snap-type: y mandatory; scroll-padding-top: var(--spot-top);
 }
+.spot [data-tile] { scroll-snap-align: start; }
 .spot::-webkit-scrollbar { display: none; }
 .stack { list-style: none; margin: 0; padding: 0; }
-.stack > li { position: relative; height: var(--strip); animation: fade 480ms ease both; animation-delay: calc(min(var(--i), 14) * 24ms); transition: transform 480ms var(--glide); }
-.stack > li.after, .stack-section h2.after { transform: translateY(var(--grow)); }
-.stack-section h2 { transition: transform 480ms var(--glide); }
+/* spotlight.ts moves every tile each frame from the scroll position: no transitions here, or they would lag the finger */
+.stack > li { position: relative; height: var(--strip); animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
+/* scroll-snap follows transforms, so the li never moves: its card does, with `translate` (separate from the press transform) */
+.stack > li > * { translate: 0 var(--shift, 0px); will-change: transform; }
+.stack-section h2 { will-change: transform; }
 .stack > li.active { z-index: 2; }
 .stack > li.active .cardface, .stack > li.active .idface { box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08), 0 24px 50px -20px rgba(0, 0, 0, 0.8), 0 10px 20px -12px rgba(0, 0, 0, 0.5); }
 :root[data-theme="light"] .stack > li.active .cardface, :root[data-theme="light"] .stack > li.active .idface { box-shadow: 0 0 0 0.5px rgba(16, 20, 40, 0.08), 0 24px 50px -22px rgba(16, 20, 40, 0.55), 0 8px 18px -12px rgba(16, 20, 40, 0.3); }
@@ -630,31 +635,32 @@ body:has(.wallet) { overflow: hidden; }
 .btn:active { transform: scale(0.95); }
 .action { transition: transform 320ms var(--bounce), color var(--ease); }
 .action:active { transform: scale(0.82); }
-.switch:active::after { width: 32px; }
-.switch.on:active::after { transform: translateX(15px); }
+.switch::after { transform-origin: left center; }
+.switch.on::after { transform-origin: right center; }
+.switch:active::after { transform: scaleX(1.18); }
+.switch.on:active::after { transform: translateX(20px) scaleX(1.18); }
 .menu-pop { animation-duration: 260ms; animation-timing-function: var(--bounce); }
 
 /* the stack: every strip sits on the card above it with its own shadow and a hairline of light */
 .stack .cardface, .stack .idface {
   box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.07), 0 -16px 32px -18px rgba(0, 0, 0, 0.8), 0 -2px 6px -2px rgba(0, 0, 0, 0.35);
-  transition: transform 420ms var(--bounce), box-shadow 420ms var(--bounce);
+  transition: transform 420ms var(--bounce);
 }
 :root[data-theme="light"] .stack .cardface, :root[data-theme="light"] .stack .idface {
   box-shadow: 0 0 0 0.5px rgba(16, 20, 40, 0.08), 0 -14px 28px -18px rgba(16, 20, 40, 0.5), 0 -2px 6px -3px rgba(16, 20, 40, 0.2);
 }
-.stack .cardface:active, .stack .idface:active { transform: translateY(-6px) scale(1.01); box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.07), 0 -22px 44px -16px rgba(0, 0, 0, 0.85), 0 -2px 6px -2px rgba(0, 0, 0, 0.35); }
+.stack .cardface:active, .stack .idface:active { transform: translateY(-6px) scale(1.01); }
 .wallet-head { position: relative; z-index: 30; animation: fade-down 480ms var(--glide) both; }
 @keyframes fade-down { from { opacity: 0; transform: translateY(-8px); } }
 .searchbar { animation: fade-down 320ms var(--glide) both; }
 
 /* the focused card: a gloss sweeps across as it arrives, details rise under it, the pile springs up */
-.focus-card { position: relative; }
-.focus-card::after {
-  content: ""; position: absolute; inset: 0; z-index: 2; border-radius: 22px; pointer-events: none;
-  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, 0.22) 48%, rgba(255, 255, 255, 0.05) 52%, transparent 70%) no-repeat;
-  background-size: 280% 100%; animation: sheen 1100ms cubic-bezier(0.3, 0.6, 0.2, 1) 260ms both;
+.focus-card .cf-side::after {
+  content: ""; position: absolute; inset: 0 -60%; z-index: 3; pointer-events: none;
+  background: linear-gradient(110deg, transparent 38%, rgba(255, 255, 255, 0.24) 49%, rgba(255, 255, 255, 0.06) 53%, transparent 62%);
+  transform: translate3d(-70%, 0, 0); animation: sheen 1100ms cubic-bezier(0.3, 0.6, 0.2, 1) 300ms both;
 }
-@keyframes sheen { from { background-position: 120% 0; } to { background-position: -120% 0; } }
+@keyframes sheen { to { transform: translate3d(70%, 0, 0); } }
 .focus .detail > :not(.detail-card) { animation: rise 560ms var(--glide) both; }
 .focus .action-bar { animation-delay: 80ms; }
 .focus .rows, .focus .doc-files { animation-delay: 140ms; }
@@ -665,8 +671,13 @@ body:has(.wallet) { overflow: hidden; }
 /* lock screen: a breathing glow, keys that press in, dots that pop as they fill */
 .lock-card { animation: lock-in 640ms var(--glide) both; }
 @keyframes lock-in { from { opacity: 0; transform: translateY(16px) scale(0.98); } }
-.lock-mark { animation: breathe 3.6s ease-in-out infinite; }
-@keyframes breathe { 50% { box-shadow: 0 18px 46px -10px rgba(10, 132, 255, 0.75); transform: translateY(-2px); } }
+.lock-mark { position: relative; animation: float-mark 3.6s ease-in-out infinite; }
+.lock-mark::before {
+  content: ""; position: absolute; inset: 6px; z-index: -1; border-radius: inherit; background: var(--accent);
+  filter: blur(18px); transform: translate3d(0, 10px, 0); opacity: 0.45; animation: glow 3.6s ease-in-out infinite;
+}
+@keyframes float-mark { 50% { transform: translate3d(0, -2px, 0); } }
+@keyframes glow { 50% { opacity: 0.8; } }
 .pin-key { transition: transform 260ms var(--bounce), background 120ms ease; }
 .pin-key:active { transform: scale(0.88); }
 .pin-dots span { transition: background 120ms ease, border-color 120ms ease; }
@@ -684,11 +695,11 @@ body:has(.wallet) { overflow: hidden; }
 ::view-transition-old(root), ::view-transition-new(root) { animation-duration: 260ms; animation-timing-function: var(--glide); }
 :root[data-vt="unlock"]::view-transition-old(root) { animation: 320ms cubic-bezier(0.4, 0, 0.6, 1) both vt-lock-out; }
 :root[data-vt="unlock"]::view-transition-new(root) { animation: 520ms var(--glide) both vt-wallet-in; }
-@keyframes vt-lock-out { to { opacity: 0; transform: scale(1.06); filter: blur(8px); } }
+@keyframes vt-lock-out { to { opacity: 0; transform: scale(1.06); } }
 @keyframes vt-wallet-in { from { opacity: 0; transform: translateY(24px) scale(0.98); } }
 :root[data-vt="lock"]::view-transition-old(root) { animation: 300ms cubic-bezier(0.4, 0, 0.6, 1) both vt-wallet-out; }
 :root[data-vt="lock"]::view-transition-new(root) { animation: 420ms var(--glide) both vt-fade-in; }
-@keyframes vt-wallet-out { to { opacity: 0; transform: scale(0.96); filter: blur(6px); } }
+@keyframes vt-wallet-out { to { opacity: 0; transform: scale(0.96); } }
 @keyframes vt-fade-in { from { opacity: 0; } }
 :root[data-vt="sheet"]::view-transition-old(sheet) { animation: 300ms cubic-bezier(0.4, 0, 0.8, 1) both vt-sheet-out; }
 :root[data-vt="sheet"]::view-transition-new(sheet) { animation: none; }
