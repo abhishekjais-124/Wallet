@@ -18,6 +18,7 @@ import { Lock } from "./components/Lock.tsx";
 import { RecoverySheet } from "./components/Recovery.tsx";
 import { Settings } from "./components/Settings.tsx";
 import { eraseSealed, getPref, loadSealed, saveSealed, setPref, type ThemePref, type VaultData } from "./store.ts";
+import { useSpotlight } from "./spotlight.ts";
 import { glide, haptic, Icon, Menu, ToastHost, transition } from "./ui.tsx";
 
 interface Session {
@@ -378,7 +379,13 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
   }, [cards, deferredQuery, filter]);
 
   const open = cards.find((c) => c.id === openId) ?? null;
-  const openCard = useCallback((id: string) => glide(id, () => setOpenId(id), true), []);
+  // the scroller with the spotlight: a tap on the open tile shows its details, a tap on a strip brings it in
+  const spotRef = useRef<HTMLDivElement>(null);
+  const spot = useSpotlight(spotRef, `${shown.map((c) => c.id).join()}|${docs.length}|${filter}`);
+  const openCard = useCallback((id: string) => {
+    if (spot.activeId !== id) return spot.bring(id);
+    glide(id, () => setOpenId(id), true);
+  }, [spot]);
   const closeCard = useCallback(() => { if (openId) glide(openId, () => setOpenId(null), false); }, [openId]);
   const upsert = async (card: Card) => {
     await save(cards.some((c) => c.id === card.id) ? cards.map((c) => (c.id === card.id ? card : c)) : [...cards, card]);
@@ -451,6 +458,7 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
           </div>
         )}
 
+        <div className="spot" ref={spotRef}>
         {cards.length === 0 ? (
           !searching && (
             <div className="empty">
@@ -468,13 +476,15 @@ function WalletView({ cards, save, docs, saveDocs, onLock, settings }: {
           </ul>
         )}
 
-        <DocsView docs={docs} save={saveDocs} adding={addingDoc} onAdded={doneAddingDoc} query={filter === "all" ? deferredQuery : null} />
+        <DocsView docs={docs} save={saveDocs} adding={addingDoc} onAdded={doneAddingDoc} query={filter === "all" ? deferredQuery : null}
+          activeId={spot.activeId} onBring={spot.bring} />
 
         {!searching && (cards.length > 0 || docs.length > 0) && (
           <p className="wallet-foot">
             {cards.length} card{cards.length === 1 ? "" : "s"}{docs.length ? ` · ${docs.length} ID${docs.length === 1 ? "" : "s"}` : ""} · encrypted on this device
           </p>
         )}
+        </div>
       </main>
 
       {!searching && (cards.length > 0 || docs.length > 0) && (

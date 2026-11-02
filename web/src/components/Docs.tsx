@@ -13,12 +13,15 @@ import { IdFace } from "./IdFace.tsx";
  * The IDs, as a second stack under the cards (like passes in Apple Wallet), then the focused view, editor and share
  * sheet. `query` filters them while searching; null hides the stack (a card-only filter is on).
  */
-export function DocsView({ docs, save, adding, onAdded, query }: {
+export function DocsView({ docs, save, adding, onAdded, query, activeId, onBring }: {
   docs: IdDoc[];
   save: (docs: IdDoc[]) => Promise<void>;
   adding: boolean;
   onAdded: () => void;
   query: string | null;
+  /** the tile in the spotlight; a tap on any other scrolls it in instead of opening it */
+  activeId: string | null;
+  onBring: (id: string) => void;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
   const [editing, setEditing] = useState<IdDoc | "new" | null>(null);
@@ -37,7 +40,11 @@ export function DocsView({ docs, save, adding, onAdded, query }: {
     .filter((d) => !q || [d.name, DOC_LABEL[d.type]].some((x) => x.toLowerCase().includes(q)) || d.number.toLowerCase().endsWith(q))
     .sort((a, b) => order[a.type] - order[b.type] || a.name.localeCompare(b.name));
   const open = docs.find((d) => d.id === openId) ?? null;
-  const openDoc = (id: string) => { haptic(); glide(id, () => setOpenId(id), true); };
+  const openDoc = (id: string) => {
+    haptic();
+    if (activeId !== id) return onBring(id);
+    glide(id, () => setOpenId(id), true);
+  };
   const closeDoc = () => { if (openId) glide(openId, () => setOpenId(null), false); };
   const upsert = async (draft: IdDoc) => {
     const doc = { ...draft, files: await Promise.all(draft.files.map(storeFile)) };

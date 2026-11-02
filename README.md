@@ -18,7 +18,7 @@ WALLET_BASE=/Wallet npm start       # http://localhost:8788/Wallet/
 
 ## Features
 
-* Apple Wallet layout: cards in a stack showing only their top strip; tap one and it glides to the top with its details, the rest drop into a pile at the bottom (View Transitions). + and ••• in the header, search button at the bottom right.
+* Apple Wallet layout: a spotlight stack where one card is open and the others are strips above and below; a short scroll moves the spotlight to the next card and snaps it into place. Tap a strip to bring it in; tap the open card and it glides to the top with its details, the rest drop into a pile at the bottom (View Transitions). + and ••• in the header, search button at the bottom right.
 * Add, edit, delete and favourite cards. Fields: bank, nickname, name on card, credit or debit, network
   (detected from the number: Visa, Mastercard, RuPay, Amex, Diners, Discover, Maestro, JCB), number, expiry, CVV and category.
 * Card look: every card gets drawn artwork (waves, honeycomb, rays, …) picked from its name, in its own colours, or
