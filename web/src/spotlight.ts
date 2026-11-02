@@ -30,6 +30,8 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
     let tiles: HTMLElement[] = [];
     let tops: number[] = [];
     let grows: number[] = [];
+    // how far below the top the open card should sit once there are strips to pile above it
+    let mid = 0;
     let line0 = 0;
 
     const measure = () => {
@@ -39,12 +41,18 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
       line0 = spotTop(el);
       // how much taller each tile is when open (cards and IDs differ)
       grows = tiles.map((t) => Math.max(0, ((t.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0) - t.offsetHeight));
+      const open = (tiles[0]?.offsetHeight ?? 0) + (grows[0] ?? 0);
+      mid = Math.max(0, Math.round(0.44 * el.clientHeight - open / 2) - spotTop(el));
     };
 
     const frame = () => {
       raf = 0;
       if (!tiles.length) return;
       const line = el.scrollTop + line0;
+      // the first card sits at the top with nothing above it. Scrolling then lifts the whole stack down by as much as
+      // it scrolls, so the cards open in place while their strips pile up above, until the open one reaches `mid`;
+      // from there the list scrolls as usual (a transform on the cards, so the snap points stay put)
+      el.style.setProperty("--lift", `${Math.min(mid, Math.max(0, el.scrollTop))}px`);
       // fractional index: k + how far the line is between tile k and k+1
       let k = 0;
       while (k < tops.length - 1 && tops[k + 1]! <= line) k++;

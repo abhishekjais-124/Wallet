@@ -560,10 +560,10 @@ body:has(.wallet) { overflow: hidden; }
 
 /* the spotlight scroller: strips, and the one on the spotline open (spotlight.ts moves the tiles and sets .active) */
 .spot {
-  --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: max(8px, calc(44dvh - 215px));
+  --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: 8px;
 
   position: relative; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  /* the open card sits a little above the middle, strips above and below it; room under the last tile, so even it can reach the spotline */
+  /* the first card sits at the top; spotlight.ts lifts the stack so later cards open a little above the middle. Room under the last tile, so even it can reach the spotline */
   padding: var(--spot-top) 0 calc(100dvh - var(--strip)); scrollbar-width: none;
   /* the platform settles on a card when a scroll ends, with its own momentum */
   scroll-snap-type: y mandatory; scroll-padding-top: var(--spot-top);
@@ -575,7 +575,7 @@ body:has(.wallet) { overflow: hidden; }
 .stack > li { position: relative; height: var(--strip); container-type: inline-size; animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
 /* scroll-snap follows transforms, so the li never moves: its card does, with `translate` (separate from the press transform) */
 .stack > li > * {
-  position: relative; translate: 0 var(--shift, 0px); scale: calc(1 - 0.035 * var(--fold, 0)); transform-origin: 50% 0; will-change: transform;
+  position: relative; translate: 0 calc(var(--shift, 0px) + var(--lift, 0px)); scale: calc(1 - 0.035 * var(--fold, 0)); transform-origin: 50% 0; will-change: transform;
 }
 /* the last tile shows only its strip until it opens (nothing else covers it); the clip starts above the box so the shadow stays */
 .stack > li.last.clipped > * { clip-path: inset(-40px 0 calc((100% - var(--strip)) * (1 - var(--open, 1))) 0 round 5.5cqw); }
