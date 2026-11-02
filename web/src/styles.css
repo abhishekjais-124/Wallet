@@ -573,7 +573,10 @@ body:has(.wallet) { overflow: hidden; }
 .spot::-webkit-scrollbar { display: none; }
 .stack { list-style: none; margin: 0; padding: 0; }
 /* spotlight.ts moves every tile each frame from the scroll position: no transitions here, or they would lag the finger */
-.stack > li { position: relative; height: var(--strip); container-type: inline-size; animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
+/* a tile's box is only a strip tall while its face is moved and drawn much larger: touches must fall through the empty
+   boxes of the tiles after the open one to the face underneath, so the boxes take no touches, only the faces do */
+.stack > li { position: relative; height: var(--strip); container-type: inline-size; pointer-events: none; animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
+.stack > li > * { pointer-events: auto; }
 /* scroll-snap follows transforms, so the li never moves: its card does, with `translate` (separate from the press transform) */
 .stack > li > * {
   position: relative; translate: 0 calc(var(--shift, 0px) + var(--lift, 0px)); scale: calc(1 - 0.035 * var(--fold, 0)); transform-origin: 50% 0; will-change: transform;
