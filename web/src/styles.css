@@ -561,7 +561,7 @@ body:has(.wallet) { overflow: hidden; }
 /* the spotlight scroller: strips, and the one on the spotline open (spotlight.ts moves the tiles and sets .active) */
 .spot {
   --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: calc(var(--strip) + 6px);
-  --card-radius: calc(min(460px, 100vw - 32px) * 0.055);
+
   position: relative; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   /* room under the last tile, so even the last card or ID can reach the spotline */
   padding: var(--spot-top) 0 calc(100dvh - var(--spot-top) - var(--strip)); scrollbar-width: none;
@@ -572,18 +572,22 @@ body:has(.wallet) { overflow: hidden; }
 .spot::-webkit-scrollbar { display: none; }
 .stack { list-style: none; margin: 0; padding: 0; }
 /* spotlight.ts moves every tile each frame from the scroll position: no transitions here, or they would lag the finger */
-.stack > li { position: relative; height: var(--strip); animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
+.stack > li { position: relative; height: var(--strip); container-type: inline-size; animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
 /* scroll-snap follows transforms, so the li never moves: its card does, with `translate` (separate from the press transform) */
 .stack > li > * {
   position: relative; translate: 0 var(--shift, 0px); scale: calc(1 - 0.035 * var(--fold, 0)); transform-origin: 50% 0; will-change: transform;
-  /* a tile that is not open shows only its strip even with nothing on top of it (the last one); the clip starts above the box so the shadow stays */
-  clip-path: inset(-40px 0 calc((100% - var(--strip)) * (1 - var(--open, 1))) 0 round var(--card-radius));
 }
+/* the last tile shows only its strip until it opens (nothing else covers it); the clip starts above the box so the shadow stays */
+.stack > li.last.clipped > * { clip-path: inset(-40px 0 calc((100% - var(--strip)) * (1 - var(--open, 1))) 0 round 5.5cqw); }
+.stack > li.last.clipped > .idface { clip-path: inset(-40px 0 calc((100% - var(--strip)) * (1 - var(--open, 1))) 0 round 5cqw); }
+/* continuous corners, like iOS, where the browser draws them */
+.cardface, .cf-side, .idface, .id-inner, .stack > li > *::after { corner-shape: squircle; }
 /* a strip that has folded away sits further back: a touch smaller and darker, like the passes behind in Apple Wallet */
 .stack > li > *::after {
-  content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: var(--card-radius);
+  content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: 5.5cqw;
   background: #000; opacity: calc(var(--fold, 0) * 0.28);
 }
+.stack > li > .idface::after { border-radius: 5cqw; }
 
 .stack > li.active { z-index: 2; }
 /* the open card paints above the strips, so its shadow must stay close or it hazes the strip beneath */

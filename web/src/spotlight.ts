@@ -34,6 +34,7 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
     const measure = () => {
       tiles = [...el.querySelectorAll<HTMLElement>("[data-tile]")];
       tops = tiles.map((t) => t.offsetTop);
+      tiles.forEach((t, i) => t.classList.toggle("last", i === tiles.length - 1));
       line0 = spotTop(el);
       // how much taller each tile is when open (cards and IDs differ)
       grows = tiles.map((t) => Math.max(0, ((t.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0) - t.offsetHeight));
@@ -57,9 +58,13 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
         t.style.setProperty("--shift", `${shift(i)}px`);
         // how far a tile above the line has folded away (0 open, 1 a strip): it recedes and dims with it
         t.style.setProperty("--fold", `${Math.min(1, Math.max(0, p - i))}`);
-        // how far a tile at or after the line has opened (1 open, 0 a strip): the last tile has nothing covering it
-        t.style.setProperty("--open", `${1 - Math.min(1, Math.max(0, i - p))}`);
       });
+      // the last tile has nothing covering its lower part: it is clipped to its strip until it opens (clip edges are
+      // not anti-aliased in WebKit, so no other tile is clipped)
+      const last = tiles[tiles.length - 1]!;
+      const open = 1 - Math.min(1, Math.max(0, tiles.length - 1 - p));
+      last.style.setProperty("--open", `${open}`);
+      last.classList.toggle("clipped", open < 0.999);
 
       const best = tiles[Math.round(p)]!;
       const id = best.dataset.tile ?? null;
