@@ -560,10 +560,10 @@ body:has(.wallet) { overflow: hidden; }
 
 /* the spotlight scroller: strips, and the one on the spotline open (spotlight.ts moves the tiles and sets .active) */
 .spot {
-  --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: 8px;
+  --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: max(8px, calc(44dvh - 215px));
 
   position: relative; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  /* the open card sits just under the search field; room under the last tile, so even it can reach the spotline */
+  /* the open card sits a little above the middle, strips above and below it; room under the last tile, so even it can reach the spotline */
   padding: var(--spot-top) 0 calc(100dvh - var(--strip)); scrollbar-width: none;
   /* the platform settles on a card when a scroll ends, with its own momentum */
   scroll-snap-type: y mandatory; scroll-padding-top: var(--spot-top);
