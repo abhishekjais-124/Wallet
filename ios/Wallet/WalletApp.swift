@@ -13,6 +13,9 @@ struct WalletApp: App {
     WindowGroup {
       WalletWebView()
         .ignoresSafeArea()
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+          Task { await Island.endExpired() }
+        }
         .background(Color(red: 8 / 255, green: 9 / 255, blue: 13 / 255))
     }
   }

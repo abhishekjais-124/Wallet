@@ -125,7 +125,8 @@ non-sensitive scope, so no Google review is needed. Its required privacy page is
 number and starts a Live Activity drawn by the `WalletIsland` widget extension (`ios/WalletIsland/`): the card's
 bank, name, last four, expiry and network in the Dynamic Island and on the lock screen, with a countdown. Only what is
 printed on the face goes to the island; the full number sits in the clipboard with a one-minute expiry that iOS
-enforces, and the activity ends at the same moment, app awake or not. Needs an iPhone with the Dynamic Island
+enforces. The activity stays live for the minute (an ended one leaves the island), then turns to a "cleared" tick on
+its own; Wallet ends it then if it is still awake, otherwise the next time it opens. Needs an iPhone with the Dynamic Island
 (iPhone 14 Pro or later) and Live Activities allowed for Wallet. The app has its own storage, separate from the Safari
 home-screen app: restore with Google or a backup the first time.
 

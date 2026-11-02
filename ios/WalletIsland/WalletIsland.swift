@@ -36,12 +36,17 @@ struct CardActivityWidget: Widget {
         }
         DynamicIslandExpandedRegion(.bottom) {
           HStack {
-            Label("Number copied", systemImage: "doc.on.doc.fill").font(.system(size: 12, weight: .medium))
-            Spacer()
-            Text("clears in ")
-              .font(.system(size: 12))
-            + Text(timerInterval: Date.now...context.state.until, countsDown: true)
-              .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            if context.isStale {
+              Label("Number cleared", systemImage: "checkmark.circle.fill").font(.system(size: 12, weight: .medium))
+              Spacer()
+            } else {
+              Label("Number copied", systemImage: "doc.on.doc.fill").font(.system(size: 12, weight: .medium))
+              Spacer()
+              Text("clears in ")
+                .font(.system(size: 12))
+              + Text(timerInterval: Date.now...context.state.until, countsDown: true)
+                .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            }
           }
           .foregroundStyle(.white.opacity(0.85))
           .padding(.horizontal, 4)
@@ -50,11 +55,20 @@ struct CardActivityWidget: Widget {
       } compactLeading: {
         BankDot(card: context.attributes)
       } compactTrailing: {
-        Text("•• \(context.attributes.last4)")
-          .font(.system(size: 13, weight: .semibold, design: .monospaced))
-          .foregroundStyle(.white)
+        // after the minute (stale date) the number is gone from the clipboard: say so instead of the digits
+        if context.isStale {
+          Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        } else {
+          Text("•• \(context.attributes.last4)")
+            .font(.system(size: 13, weight: .semibold, design: .monospaced))
+            .foregroundStyle(.white)
+        }
       } minimal: {
-        BankDot(card: context.attributes)
+        if context.isStale {
+          Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+        } else {
+          BankDot(card: context.attributes)
+        }
       }
       .keylineTint(Color(hex: context.attributes.color2))
     }

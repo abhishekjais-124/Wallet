@@ -20,14 +20,28 @@ enum Island {
     // the number expires from the clipboard on its own too, in case the app is killed first
     UIPasteboard.general.setItems([[UIPasteboard.typeAutomatic: number]], options: [.expirationDate: until])
     guard available else { throw IslandError(message: "Live Activities are off for Wallet. Turn them on in Settings.") }
-    // the minute is enforced by iOS itself: the activity ends at `until` and the clipboard expires then too, so neither
-    // needs the app to be awake. The timer below only tidies up early when it is.
-    let activity = try Activity.request(attributes: attrs, content: .init(state: .init(until: until), staleDate: until))
-    Task { await activity.end(.init(state: .init(until: until), staleDate: until), dismissalPolicy: .after(until)) }
+    // the activity must stay live to be in the Dynamic Island (an ended one only stays on the lock screen), so it is
+    // ended when the minute is up: by the timer below, kept running in the background for that minute, or at the
+    // next launch if iOS stopped the app first. Its stale date turns the island to "cleared" in any case, and the
+    // clipboard expiry is iOS's own.
+    _ = try Activity.request(attributes: attrs, content: .init(state: .init(until: until), staleDate: until))
+    let app = UIApplication.shared
+    var background = UIBackgroundTaskIdentifier.invalid
+    background = app.beginBackgroundTask { app.endBackgroundTask(background) }
     clear = Task {
       try? await Task.sleep(for: .seconds(seconds))
-      guard !Task.isCancelled else { return }
-      UIPasteboard.general.items = []
+      if !Task.isCancelled {
+        UIPasteboard.general.items = []
+        await endAll()
+      }
+      app.endBackgroundTask(background)
+    }
+  }
+
+  /// At launch and on return: an activity whose minute is over (the app was stopped meanwhile) goes away.
+  static func endExpired() async {
+    for a in Activity<CardActivityAttributes>.activities where a.content.state.until <= .now {
+      await a.end(nil, dismissalPolicy: .immediate)
     }
   }
 
