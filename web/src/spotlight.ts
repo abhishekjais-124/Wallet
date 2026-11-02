@@ -4,7 +4,8 @@ import { haptic } from "./ui.tsx";
 /**
  * The spotlight stack: every tile is a strip, and the one on the spotline (the scroller's top padding) is open.
  * Nothing switches state on a timer: each frame, the scroll position is turned into a fractional index p, and every
- * tile after the line has its contents pushed down by `grow * clamp(i - p, 0, 1)`. So as you scroll, the next card slides open
+ * tile after the line has its contents pushed down by `grow * clamp(i - p, 0, 1)` (grow: how much taller the open
+ * tile is). So as you scroll, the next card slides open
  * under your finger while the current one folds away, 1:1. CSS scroll-snap settles on a card when the scroll ends,
  * with the platform's own momentum. Returns which tile is open and a way to bring another one in.
  */
@@ -27,21 +28,15 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
     // layout is measured once per change of the list or the viewport, never inside the scroll frame
     let tiles: HTMLElement[] = [];
     let tops: number[] = [];
-    let heads: { node: HTMLElement; before: number }[] = [];
-    let grow = 0;
+    let grows: number[] = [];
     let line0 = 0;
 
     const measure = () => {
       tiles = [...el.querySelectorAll<HTMLElement>("[data-tile]")];
       tops = tiles.map((t) => t.offsetTop);
       line0 = spotTop(el);
-      const first = tiles[0];
-      const face = first?.firstElementChild as HTMLElement | null;
-      grow = Math.max(0, (face?.offsetHeight ?? 0) - (first?.offsetHeight ?? 0));
-      // a section heading (IDs) moves with the first tile after it
-      heads = [...el.querySelectorAll<HTMLElement>(".stack-section h2")].map((node) => ({
-        node, before: tiles.findIndex((t) => t.offsetTop > node.offsetTop),
-      }));
+      // how much taller each tile is when open (cards and IDs differ)
+      grows = tiles.map((t) => Math.max(0, ((t.firstElementChild as HTMLElement | null)?.offsetHeight ?? 0) - t.offsetHeight));
     };
 
     const frame = () => {
@@ -52,11 +47,13 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
       let k = 0;
       while (k < tops.length - 1 && tops[k + 1]! <= line) k++;
       const next = tops[k + 1];
-      const p = next === undefined ? k : k + Math.min(1, Math.max(0, (line - tops[k]!) / (next - tops[k]!)));
+      const f = next === undefined ? 0 : Math.min(1, Math.max(0, (line - tops[k]!) / (next - tops[k]!)));
+      const p = k + f;
+      // the open space blends from tile k's height to tile k+1's as the spotlight moves between them
+      const grow = grows[k]! + ((grows[k + 1] ?? grows[k]!) - grows[k]!) * f;
       const shift = (i: number) => grow * Math.min(1, Math.max(0, i - p));
       // the tile itself stays put (it is the snap point); its contents move, through --shift (styles.css)
       tiles.forEach((t, i) => t.style.setProperty("--shift", `${shift(i)}px`));
-      for (const h of heads) if (h.before >= 0) h.node.style.transform = `translate3d(0, ${shift(h.before)}px, 0)`;
 
       const best = tiles[Math.round(p)]!;
       const id = best.dataset.tile ?? null;

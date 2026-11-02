@@ -57,7 +57,6 @@ export function DocsView({ docs, save, adding, onAdded, query, activeId, onBring
     <>
       {query !== null && shown.length > 0 && (
         <section className="stack-section" aria-label="IDs">
-          <h2>IDs</h2>
           <ul className="stack">
             {shown.map((d, i) => (
               <li key={d.id} data-tile={d.id} style={{ "--i": i } as React.CSSProperties}>

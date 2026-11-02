@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 
 const PATHS = {
   search: "M11 19a8 8 0 1 1 0-16 8 8 0 0 1 0 16Zm10 2-4.35-4.35",
@@ -81,6 +81,12 @@ export function transition(update: () => void, kind?: string): void {
   });
 }
 
+/**
+ * Sheets and focused views render into #overlays, a layer beside the app: drawn inside the card scroller they would
+ * be clipped by it.
+ */
+const overlay = (node: React.ReactNode) => createPortal(node, document.getElementById("overlays") ?? document.body);
+
 // open sheets and focused views; the page under them scrolls again only when the last one closes
 let overlays = 0;
 function lockPage(): () => void {
@@ -105,7 +111,7 @@ export function Sheet({ title, onClose, children, wide }: { title: string; onClo
       prev?.focus?.();
     };
   }, [close]);
-  return (
+  return overlay(
     <div className="sheet-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
       <div className={`sheet${wide ? " wide" : ""}`} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
         <header className="sheet-head">
@@ -150,7 +156,7 @@ export function Focus({ title, onClose, pile, children }: { title: string; onClo
       prev?.focus?.({ preventScroll: true });
     };
   }, [onClose]);
-  return (
+  return overlay(
     <div className="focus" role="dialog" aria-modal="true" aria-label={title} tabIndex={-1} ref={ref}>
       <header className="focus-head">
         <button type="button" className="pill-btn" onClick={() => { haptic(); onClose(); }}>Done</button>

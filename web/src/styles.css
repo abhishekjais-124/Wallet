@@ -74,7 +74,7 @@ body {
 }
 body.sheet-open { overflow: hidden; }
 /* hidden tab: blur everything so the app switcher snapshot shows no card data */
-body.veiled #root { filter: blur(24px); }
+body.veiled #root, body.veiled #overlays { filter: blur(24px); }
 button { font: inherit; color: inherit; }
 h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
 p { margin: 0; }
@@ -562,7 +562,8 @@ body:has(.wallet) { overflow: hidden; }
 .spot {
   --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: calc(var(--strip) + 6px);
   position: relative; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
-  padding: var(--spot-top) 0 calc(var(--full) + 90px + env(safe-area-inset-bottom)); scrollbar-width: none;
+  /* room under the last tile, so even the last card or ID can reach the spotline */
+  padding: var(--spot-top) 0 calc(100dvh - var(--spot-top) - var(--strip)); scrollbar-width: none;
   /* the platform settles on a card when a scroll ends, with its own momentum */
   scroll-snap-type: y mandatory; scroll-padding-top: var(--spot-top);
 }
@@ -573,15 +574,15 @@ body:has(.wallet) { overflow: hidden; }
 .stack > li { position: relative; height: var(--strip); animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
 /* scroll-snap follows transforms, so the li never moves: its card does, with `translate` (separate from the press transform) */
 .stack > li > * { translate: 0 var(--shift, 0px); will-change: transform; }
-.stack-section h2 { will-change: transform; }
+
 .stack > li.active { z-index: 2; }
 .stack > li.active .cardface, .stack > li.active .idface { box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08), 0 24px 50px -20px rgba(0, 0, 0, 0.8), 0 10px 20px -12px rgba(0, 0, 0, 0.5); }
 :root[data-theme="light"] .stack > li.active .cardface, :root[data-theme="light"] .stack > li.active .idface { box-shadow: 0 0 0 0.5px rgba(16, 20, 40, 0.08), 0 24px 50px -22px rgba(16, 20, 40, 0.55), 0 8px 18px -12px rgba(16, 20, 40, 0.3); }
 .stack .cardface, .stack .idface { box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.06), 0 -12px 26px -16px rgba(0, 0, 0, 0.7); transition: transform 240ms cubic-bezier(0.2, 0.9, 0.3, 1.1); }
 .stack .cardface:active, .stack .idface:active { transform: translateY(-6px); }
 .stack .card-badges { top: calc(var(--strip) / 2 - 11px); right: 84px; }
-.stack-section { margin-top: 30px; }
-.stack-section h2 { margin: 0 0 12px 2px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+/* IDs continue the same stack straight after the cards, like passes in Apple Wallet */
+.stack-section { margin: 0; }
 .wallet-foot { margin-top: 26px; text-align: center; font-size: 12.5px; color: var(--text-3); }
 
 .search-fab {
