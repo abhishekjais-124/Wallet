@@ -561,6 +561,7 @@ body:has(.wallet) { overflow: hidden; }
 /* the spotlight scroller: strips, and the one on the spotline open (spotlight.ts moves the tiles and sets .active) */
 .spot {
   --strip: clamp(54px, 15.5vw, 70px); --full: calc(min(460px, 100vw - 32px) / 1.586); --spot-top: calc(var(--strip) + 6px);
+  --card-radius: calc(min(460px, 100vw - 32px) * 0.055);
   position: relative; flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
   /* room under the last tile, so even the last card or ID can reach the spotline */
   padding: var(--spot-top) 0 calc(100dvh - var(--spot-top) - var(--strip)); scrollbar-width: none;
@@ -573,7 +574,12 @@ body:has(.wallet) { overflow: hidden; }
 /* spotlight.ts moves every tile each frame from the scroll position: no transitions here, or they would lag the finger */
 .stack > li { position: relative; height: var(--strip); animation: fade 420ms ease both; animation-delay: calc(min(var(--i), 14) * 22ms); }
 /* scroll-snap follows transforms, so the li never moves: its card does, with `translate` (separate from the press transform) */
-.stack > li > * { translate: 0 var(--shift, 0px); will-change: transform; }
+.stack > li > * { position: relative; translate: 0 var(--shift, 0px); scale: calc(1 - 0.035 * var(--fold, 0)); transform-origin: 50% 0; will-change: transform; }
+/* a strip that has folded away sits further back: a touch smaller and darker, like the passes behind in Apple Wallet */
+.stack > li > *::after {
+  content: ""; position: absolute; inset: 0; z-index: 4; pointer-events: none; border-radius: var(--card-radius);
+  background: #000; opacity: calc(var(--fold, 0) * 0.28);
+}
 
 .stack > li.active { z-index: 2; }
 .stack > li.active .cardface, .stack > li.active .idface { box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.08), 0 24px 50px -20px rgba(0, 0, 0, 0.8), 0 10px 20px -12px rgba(0, 0, 0, 0.5); }
@@ -705,8 +711,40 @@ body:has(.wallet) { overflow: hidden; }
 :root[data-vt="sheet"]::view-transition-old(sheet) { animation: 300ms cubic-bezier(0.4, 0, 0.8, 1) both vt-sheet-out; }
 :root[data-vt="sheet"]::view-transition-new(sheet) { animation: none; }
 @keyframes vt-sheet-out { to { opacity: 0; transform: translateY(40px) scale(0.98); } }
-::view-transition-old(focus-card), ::view-transition-new(focus-card) { animation-duration: 460ms; animation-timing-function: var(--glide); }
-::view-transition-group(focus-card) { animation-duration: 460ms; animation-timing-function: var(--glide); }
+/* opening a card: the stack and header fall away beneath it, the card morphs up with a hint of overshoot, the
+   details rise in one row after another; closing plays it back */
+.spot { view-transition-name: stack; }
+.wallet-head { view-transition-name: head; }
+body:has(.focus) .spot, body:has(.focus) .wallet-head { view-transition-name: none; }
+::view-transition-old(focus-card), ::view-transition-new(focus-card) { animation-duration: 540ms; animation-timing-function: var(--glide); }
+::view-transition-group(focus-card) { animation-duration: 540ms; animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.04); }
+:root[data-vt="open"]::view-transition-old(stack) { animation: 440ms cubic-bezier(0.4, 0, 0.6, 1) both vt-stack-away; }
+:root[data-vt="open"]::view-transition-old(head) { animation: 320ms cubic-bezier(0.4, 0, 0.6, 1) both vt-head-away; }
+:root[data-vt="open"]::view-transition-old(root) { animation: 300ms ease both vt-fade-out; }
+:root[data-vt="open"]::view-transition-new(root) { animation: 420ms var(--glide) 80ms both vt-fade-in; }
+:root[data-vt="close"]::view-transition-new(stack) { animation: 520ms var(--glide) both vt-stack-back; }
+:root[data-vt="close"]::view-transition-new(head) { animation: 420ms var(--glide) 60ms both vt-head-back; }
+:root[data-vt="close"]::view-transition-old(root) { animation: 320ms cubic-bezier(0.4, 0, 0.6, 1) both vt-focus-away; }
+:root[data-vt="close"]::view-transition-new(root) { animation: 360ms var(--glide) both vt-fade-in; }
+@keyframes vt-stack-away { to { opacity: 0; transform: translateY(32px) scale(0.965); } }
+@keyframes vt-stack-back { from { opacity: 0; transform: translateY(32px) scale(0.965); } }
+@keyframes vt-head-away { to { opacity: 0; transform: translateY(-12px); } }
+@keyframes vt-head-back { from { opacity: 0; transform: translateY(-12px); } }
+@keyframes vt-focus-away { to { opacity: 0; transform: translateY(28px) scale(0.985); } }
+@keyframes vt-fade-out { to { opacity: 0; } }
+/* lock and unlock move the stack and header with the rest of the screen */
+:root[data-vt="unlock"]::view-transition-new(stack), :root[data-vt="unlock"]::view-transition-new(head) { animation: 520ms var(--glide) both vt-wallet-in; }
+:root[data-vt="lock"]::view-transition-old(stack), :root[data-vt="lock"]::view-transition-old(head) { animation: 300ms cubic-bezier(0.4, 0, 0.6, 1) both vt-wallet-out; }
+/* the detail rows arrive one after another */
+.focus .rows > * { animation: rise 520ms var(--glide) both; }
+.focus .rows > :nth-child(1) { animation-delay: 140ms; }
+.focus .rows > :nth-child(2) { animation-delay: 190ms; }
+.focus .rows > :nth-child(3) { animation-delay: 240ms; }
+.focus .rows > :nth-child(4) { animation-delay: 290ms; }
+.focus .rows > :nth-child(5) { animation-delay: 340ms; }
+.focus .rows > :nth-child(6) { animation-delay: 390ms; }
+.focus .rows > :nth-child(n + 7) { animation-delay: 430ms; }
+.focus .rows { animation: none; overflow: hidden; }
 
 /* nothing moves for people who asked for that */
 @media (prefers-reduced-motion: reduce) {

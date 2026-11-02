@@ -53,7 +53,11 @@ export function useSpotlight(ref: React.RefObject<HTMLElement | null>, key: unkn
       const grow = grows[k]! + ((grows[k + 1] ?? grows[k]!) - grows[k]!) * f;
       const shift = (i: number) => grow * Math.min(1, Math.max(0, i - p));
       // the tile itself stays put (it is the snap point); its contents move, through --shift (styles.css)
-      tiles.forEach((t, i) => t.style.setProperty("--shift", `${shift(i)}px`));
+      tiles.forEach((t, i) => {
+        t.style.setProperty("--shift", `${shift(i)}px`);
+        // how far a tile above the line has folded away (0 open, 1 a strip): it recedes and dims with it
+        t.style.setProperty("--fold", `${Math.min(1, Math.max(0, p - i))}`);
+      });
 
       const best = tiles[Math.round(p)]!;
       const id = best.dataset.tile ?? null;
